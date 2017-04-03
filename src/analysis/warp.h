@@ -1,0 +1,2 @@
+void loadMesh();
+void projectTexture();
