@@ -1,0 +1,246 @@
+name: "Up-Conv 2-image CNN"
+
+# Inputs
+layer {
+  name: "data-img1"
+  type: "ImageData"
+  top: "data-img1"
+  top: "data-img1-name"
+  image_data_param {
+    source: "data/train_camA.txt"
+    batch_size: 1
+    new_height: 128
+    new_width: 128
+  }
+}
+layer {
+  name: "data-img2"
+  type: "ImageData"
+  top: "data-img2"
+  top: "data-img2-name"
+  image_data_param {
+    source: "data/train_camB.txt"
+    batch_size: 1
+    new_height: 128
+    new_width: 128
+  }
+}
+layer {
+  name: "data-params"
+  type: "Input"
+  top: "data-params"
+  input_param {
+    shape: { dim: 1 dim: 1 }
+  }
+}
+layer {
+  name: "data-label"
+  type: "ImageData"
+  top: "data-label"
+  top: "data-label-name"
+  image_data_param {
+    source: "data/train_camO.txt"
+    batch_size: 1
+    new_height: 64
+    new_width: 64
+  }
+}
+layer {
+  name: "data-img1-name-silence"
+  type: "Silence"
+  bottom: "data-img1-name"
+}
+layer {
+  name: "data-img2-name-silence"
+  type: "Silence"
+  bottom: "data-img2-name"
+}
+layer {
+  name: "label-name-silence"
+  type: "Silence"
+  bottom: "data-label-name"
+}
+
+# FC1
+layer {
+  name: "fc1-img1"
+  type: "InnerProduct"
+  bottom: "data-img1"
+  top: "fc1img1"
+  inner_product_param {
+    num_output: 512
+  }
+}
+layer {
+  name: "fc1-img1-rec"
+  type: "ReLU"
+  bottom: "fc1img1"
+  top: "fc1img1rec"
+  relu_param {
+    negative_slope: 0.01
+  }
+}
+layer {
+  name: "fc1-img2"
+  type: "InnerProduct"
+  bottom: "data-img2"
+  top: "fc1img2"
+  inner_product_param {
+    num_output: 512
+  }
+}
+layer {
+  name: "fc1-img2-rec"
+  type: "ReLU"
+  bottom: "fc1img2"
+  top: "fc1img2rec"
+  relu_param {
+    negative_slope: 0.01
+  }
+}
+layer {
+  name: "fc1-params"
+  type: "InnerProduct"
+  bottom: "data-params"
+  top: "fc1params"
+  inner_product_param {
+    num_output: 1
+  }
+}
+layer {
+  name: "fc1-params-rec"
+  type: "ReLU"
+  bottom: "fc1params"
+  top: "fc1paramsrec"
+  relu_param {
+    negative_slope: 0.01
+  }
+}
+layer {
+  name: "fc1-concat"
+  bottom: "fc1img1rec"
+  bottom: "fc1img2rec"
+  bottom: "fc1paramsrec"
+  top: "fc1"
+  type: "Concat"
+  concat_param {
+    axis: 1
+  }
+}
+
+# FC2
+layer {
+  name: "fc2"
+  type: "InnerProduct"
+  bottom: "fc1"
+  top: "fc2"
+  inner_product_param {
+    num_output: 1024
+  }
+}
+layer {
+  name: "fc2-rec"
+  type: "ReLU"
+  bottom: "fc2"
+  top: "fc2rec"
+  relu_param {
+    negative_slope: 0.01
+  }
+}
+
+# upconv1
+layer {
+  name: "upconv1"
+  type: "Deconvolution"
+  bottom: "fc2rec"
+  top: "upconv1"
+  convolution_param {
+    num_output: 4096 # 64x8x8
+    kernel_size: 5
+    stride: 2
+  }
+}
+layer {
+  name: "upconv1-rec"
+  type: "ReLU"
+  bottom: "upconv1"
+  top: "upconv1rec"
+  relu_param {
+    negative_slope: 0.01
+  }
+}
+
+# upconv2
+layer {
+  name: "upconv2"
+  type: "Deconvolution"
+  bottom: "upconv1rec"
+  top: "upconv2"
+  convolution_param {
+    num_output: 16384 # 64x16x16
+    kernel_size: 5
+    stride: 2
+  }
+}
+layer {
+  name: "upconv2-rec"
+  type: "ReLU"
+  bottom: "upconv2"
+  top: "upconv2rec"
+  relu_param {
+    negative_slope: 0.01
+  }
+}
+
+# upconv3
+layer {
+  name: "upconv3"
+  type: "Deconvolution"
+  bottom: "upconv2rec"
+  top: "upconv3"
+  convolution_param {
+    num_output: 24576 # 24x32x32
+    kernel_size: 5
+    stride: 2
+  }
+}
+layer {
+  name: "upconv3-rec"
+  type: "ReLU"
+  bottom: "upconv3"
+  top: "upconv3rec"
+  relu_param {
+    negative_slope: 0.01
+  }
+}
+
+# upconv4
+layer {
+  name: "upconv4"
+  type: "Deconvolution"
+  bottom: "upconv3rec"
+  top: "output"
+  convolution_param {
+    num_output: 12288 # 3x64x64
+    kernel_size: 5
+    stride: 2
+  }
+}
+
+# output split
+layer {
+  name: "output-split"
+  type: "Split"
+  bottom: "output"
+  top: "result"
+  top: "lossresult"
+}
+
+# loss
+layer {
+  name: "loss"
+  type: "EuclideanLoss"
+  bottom: "lossresult"
+  bottom: "data-label"
+  top: "loss"
+}
