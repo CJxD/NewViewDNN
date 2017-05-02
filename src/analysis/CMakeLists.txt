@@ -8,4 +8,10 @@ target_link_libraries(warp
 	PRIVATE GLEW
 	PRIVATE glfw)
 
+add_executable(capture capture.cpp glutils.cpp)
+target_link_libraries(capture
+	PRIVATE GL
+	PRIVATE GLEW
+	PRIVATE glfw)
+	
 add_subdirectory(depth)

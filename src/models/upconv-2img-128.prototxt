@@ -155,7 +155,7 @@ layer {
   bottom: "fc2rec"
   top: "upconv1"
   convolution_param {
-    num_output: 16384 # 256x8x8
+    num_output: 256 # 256x8x8
     kernel_size: 5
     stride: 2
   }
@@ -177,7 +177,7 @@ layer {
   bottom: "upconv1rec"
   top: "upconv2"
   convolution_param {
-    num_output: 65536 # 256x16x16
+    num_output: 256 # 256x16x16
     kernel_size: 5
     stride: 2
   }
@@ -199,7 +199,7 @@ layer {
   bottom: "upconv2rec"
   top: "upconv3"
   convolution_param {
-    num_output: 94208 # 92x32x32
+    num_output: 92 # 92x32x32
     kernel_size: 5
     stride: 2
   }
@@ -221,7 +221,7 @@ layer {
   bottom: "upconv3rec"
   top: "upconv4"
   convolution_param {
-    num_output: 376832 # 92x64x64
+    num_output: 92 # 92x64x64
     kernel_size: 5
     stride: 2
   }
@@ -243,7 +243,7 @@ layer {
   bottom: "upconv4"
   top: "output"
   convolution_param {
-    num_output: 49152 # 3x128x128
+    num_output: 3 # 3x128x128
     kernel_size: 5
     stride: 2
   }

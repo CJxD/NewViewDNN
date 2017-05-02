@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <vector>
 #include <map>
@@ -154,6 +155,32 @@ GLuint loadTexture(const char* filename)
 	return id;
 }
 
+void calcNormal(scalar_t N[3], scalar_t v0[3], scalar_t v1[3], scalar_t v2[3])
+{
+	scalar_t v10[3];
+	v10[0] = v1[0] - v0[0];
+	v10[1] = v1[1] - v0[1];
+	v10[2] = v1[2] - v0[2];
+
+	scalar_t v20[3];
+	v20[0] = v2[0] - v0[0];
+	v20[1] = v2[1] - v0[1];
+	v20[2] = v2[2] - v0[2];
+
+	N[0] = v20[1] * v10[2] - v20[2] * v10[1];
+	N[1] = v20[2] * v10[0] - v20[0] * v10[2];
+	N[2] = v20[0] * v10[1] - v20[1] * v10[0];
+
+	scalar_t len2 = N[0] * N[0] + N[1] * N[1] + N[2] * N[2];
+	if (len2 > 0.0f)
+	{
+		scalar_t len = (scalar_t) sqrt(len2);
+
+		N[0] /= len;
+		N[1] /= len;
+	}
+}
+
 std::vector<DrawObject> loadWavefront(const char* filename)
 {
 	std::vector<DrawObject> objects;
@@ -162,7 +189,7 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::map<std::string, GLuint> textures;
-	float bmin[3], bmax[3];
+	scalar_t bmin[3], bmax[3];
 
 	std::string base_dir = "";
 	std::string obj_filename = std::string(filename);
@@ -213,7 +240,8 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 					texture_filename = (base_dir + mp->diffuse_texname).c_str();
 					if (!fileExists(texture_filename))
 					{
-						fprintf(stderr, "Unable to find file: %s\n", mp->diffuse_texname.c_str());
+						fprintf(stderr, "Unable to find file: %s\n",
+								mp->diffuse_texname.c_str());
 						exit(1);
 					}
 				}
@@ -226,13 +254,13 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 	// Append `default` material
 	materials.push_back(tinyobj::material_t());
 
-	bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<float>::max();
-	bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<float>::max();
+	bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<scalar_t>::max();
+	bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<scalar_t>::max();
 
 	for (size_t s = 0; s < shapes.size(); s++)
 	{
 		DrawObject o;
-		std::vector<float> vb; // pos(3float), normal(3float), color(3float)
+		std::vector<scalar_t> vb; // pos(3scalar_t), normal(3scalar_t), color(3scalar_t)
 		for (size_t f = 0; f < shapes[s].mesh.indices.size() / 3; f++)
 		{
 			tinyobj::index_t idx0 = shapes[s].mesh.indices[3 * f + 0];
@@ -249,16 +277,14 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 				current_material_id = materials.size() - 1; // Default material is added to the last item in `materials`.
 			}
 
-			float diffuse[3];
+			scalar_t diffuse[3];
 			for (size_t i = 0; i < 3; i++)
 			{
 				diffuse[i] = materials[current_material_id].diffuse[i];
 			}
-			float tc[3][2];
-			if (attrib.texcoords.size() > 0
-					&& idx0.texcoord_index > -1
-					&& idx1.texcoord_index > -1
-					&& idx2.texcoord_index > -1)
+			scalar_t tc[3][2];
+			if (attrib.texcoords.size() > 0 && idx0.texcoord_index > -1
+					&& idx1.texcoord_index > -1 && idx2.texcoord_index > -1)
 			{
 				assert(attrib.texcoords.size() > 2 * idx0.texcoord_index + 1);
 				assert(attrib.texcoords.size() > 2 * idx1.texcoord_index + 1);
@@ -280,7 +306,7 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 				tc[2][1] = 0.0f;
 			}
 
-			float v[3][3];
+			scalar_t v[3][3];
 			for (int k = 0; k < 3; k++)
 			{
 				int f0 = idx0.vertex_index;
@@ -301,18 +327,32 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 				bmax[k] = std::max(v[2][k], bmax[k]);
 			}
 
-			float n[3][3];
-			int f0 = idx0.normal_index;
-			int f1 = idx1.normal_index;
-			int f2 = idx2.normal_index;
-			assert(f0 >= 0);
-			assert(f1 >= 0);
-			assert(f2 >= 0);
-			for (int k = 0; k < 3; k++)
+			scalar_t n[3][3];
+			if (attrib.normals.size() > 0)
 			{
-				n[0][k] = attrib.normals[3 * f0 + k];
-				n[1][k] = attrib.normals[3 * f1 + k];
-				n[2][k] = attrib.normals[3 * f2 + k];
+				int f0 = idx0.normal_index;
+				int f1 = idx1.normal_index;
+				int f2 = idx2.normal_index;
+				assert(f0 >= 0);
+				assert(f1 >= 0);
+				assert(f2 >= 0);
+				for (int k = 0; k < 3; k++)
+				{
+					n[0][k] = attrib.normals[3 * f0 + k];
+					n[1][k] = attrib.normals[3 * f1 + k];
+					n[2][k] = attrib.normals[3 * f2 + k];
+				}
+			}
+			else
+			{
+				// Compute geometric normal
+				calcNormal(n[0], v[0], v[1], v[2]);
+				n[1][0] = n[0][0];
+				n[1][1] = n[0][1];
+				n[1][2] = n[0][2];
+				n[2][0] = n[0][0];
+				n[2][1] = n[0][1];
+				n[2][2] = n[0][2];
 			}
 
 			for (int k = 0; k < 3; k++)
@@ -324,16 +364,16 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 				vb.push_back(n[k][1]);
 				vb.push_back(n[k][2]);
 				// Combine normal and diffuse to get color.
-				float normal_factor = 0.2;
-				float diffuse_factor = 1 - normal_factor;
-				float c[3] =
+				scalar_t normal_factor = 0.2;
+				scalar_t diffuse_factor = 1 - normal_factor;
+				scalar_t c[3] =
 				{ n[k][0] * normal_factor + diffuse[0] * diffuse_factor, n[k][1]
 						* normal_factor + diffuse[1] * diffuse_factor, n[k][2]
 						* normal_factor + diffuse[2] * diffuse_factor };
-				float len2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
+				scalar_t len2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
 				if (len2 > 0.0f)
 				{
-					float len = sqrtf(len2);
+					scalar_t len = (scalar_t) sqrt(len2);
 
 					c[0] /= len;
 					c[1] /= len;
@@ -349,17 +389,40 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 		}
 
 		o.vb = 0;
+		memcpy(bmin, o.bmin, sizeof(bmin));
+		memcpy(bmax, o.bmax, sizeof(bmax));
 		o.numTriangles = 0;
 
+		int material_id = -1;
 		if (shapes[s].mesh.material_ids.size() > 0
 				&& shapes[s].mesh.material_ids.size() > s)
 		{
 			// Base case
-			o.material_id = shapes[s].mesh.material_ids[s];
+			material_id = shapes[s].mesh.material_ids[s];
 		}
 		else
 		{
-			o.material_id = materials.size() - 1; // = ID for default material.
+			material_id = materials.size() - 1; // = ID for default material.
+		}
+
+		if (material_id >= 0 && material_id < materials.size())
+		{
+			tinyobj::material_t material = materials[material_id];
+
+			memcpy(material.ambient, o.material.ambient, sizeof(material.ambient));
+			memcpy(material.diffuse, o.material.diffuse, sizeof(material.diffuse));
+			memcpy(material.specular, o.material.specular, sizeof(material.specular));
+			o.material.shininess = material.shininess;
+			o.material.roughness = material.roughness;
+
+			if (!material.ambient_texname.empty())
+				o.material.ambientTex = textures[material.ambient_texname];
+			if (!material.diffuse_texname.empty())
+				o.material.diffuseTex = textures[material.diffuse_texname];
+			if (!material.specular_texname.empty())
+				o.material.specularTex = textures[material.specular_texname];
+			if (!material.bump_texname.empty())
+				o.material.bumpTex = textures[material.bump_texname];
 		}
 
 		if (vb.size() > 0)
@@ -367,10 +430,10 @@ std::vector<DrawObject> loadWavefront(const char* filename)
 			glTry(glGenBuffers(1, &o.vb));
 			glTry(glBindBuffer(GL_ARRAY_BUFFER, o.vb));
 			glTry(
-					glBufferData(GL_ARRAY_BUFFER, vb.size() * sizeof(float), &vb.at(0), GL_STATIC_DRAW));
+					glBufferData(GL_ARRAY_BUFFER, vb.size() * sizeof(scalar_t), &vb.at(0), GL_STATIC_DRAW));
 			o.numTriangles = vb.size() / (3 + 3 + 3 + 2) * 3;
-			fprintf(stderr, "shape[%d] # of triangles = %d\n", static_cast<int>(s),
-					o.numTriangles);
+			fprintf(stderr, "shape[%d] # of triangles = %d\n",
+					static_cast<int>(s), o.numTriangles);
 		}
 
 		objects.push_back(o);
