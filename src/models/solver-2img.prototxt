@@ -1,7 +1,7 @@
 type: "Adam"
 solver_mode: CPU
 
-net: "src/models/upconv-2img-64.prototxt"
+net: "src/models/upconv-2img-128.prototxt"
 
 test_iter: 100
 test_interval: 500
