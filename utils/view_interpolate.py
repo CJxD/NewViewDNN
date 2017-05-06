@@ -2,29 +2,46 @@ import bpy, bmesh
 import os
 import sys
 import numpy as np
-from glob import glob
 
+from glob import glob
 from mathutils import Vector, Matrix
 
 context = bpy.context
+
+#
+# Camera settings
+#
 camera_size = Vector((1024, 1024))
 texture_size = Vector((1024, 1024))
 num_captures = 6
-
-mesh_simplify = 0.3
-mesh_confidence = 0.9
 
 mid_cam_pos = Vector((-1, 0, 0.1))
 centre = Vector((0, 0, 0))
 max_angle = np.pi / 3
 
+#
+# Mesh imperfection settings
+#
+mesh_simplify = 0.3
+mesh_confidence = 0.9
+
 def look_at(pos, target):
+	'''
+	Utility function returning a rotation matrix.
+	Rotates an object at pos to look towards target.
+	'''
 	direction = target - pos
 	rot_quat = direction.to_track_quat('-Z', 'Y')
 	
 	return rot_quat.to_matrix().to_4x4()
 	
 def yaw_look_at(pos, target, yaw):
+	'''
+	Utility function returning a full transformation matrix.
+	Translates an object to pos, rotates to look towards target,
+	then applies a yaw rotation. A negative value of
+	yaw rotates left, and positive rotates right.
+	'''
 	local_rot = look_at(pos, target)
 	trans = Matrix.Translation(pos)
 	yaw = Matrix.Rotation(yaw, 4, Vector((0,0,1)))
@@ -32,6 +49,9 @@ def yaw_look_at(pos, target, yaw):
 	return yaw * trans * local_rot
 
 def reset_scene():
+	'''
+	Utility function to remove all objects from the current scene.
+	'''
 	bpy.ops.wm.read_factory_settings()
 	bpy.ops.wm.addon_enable(module="uv_perspective_project")
 
@@ -50,6 +70,9 @@ def reset_scene():
 			bpy_data_iter.remove(id_data)
 			
 def setup_scene():
+	'''
+	"Lights, camera, ..."
+	'''
 	scene = context.scene
 	
 	# Lighting
@@ -87,6 +110,11 @@ def setup_scene():
 	scene.update()
 	
 def imperfect(object, origins = [Vector((0,0,0))]):
+	'''
+	Warps an object to emulate imperfections in depth estimation.
+	origins is a list of camera locations such that depth uncertainty
+	is added along the vector between object vertex and camera location.
+	'''
 	context.scene.objects.active = object
 	
 	# Apply decimate modifier
@@ -99,7 +127,7 @@ def imperfect(object, origins = [Vector((0,0,0))]):
 	me = object.data
 	bm = bmesh.from_edit_mesh(me)
 	
-	# Deform vertices
+	# Deform vertices along camera orientations
 	q = (1 - mesh_confidence) / 50
 	if q > 0:
 		for v in bm.verts:
@@ -111,8 +139,12 @@ def imperfect(object, origins = [Vector((0,0,0))]):
 		
 	bmesh.update_edit_mesh(me)
 	bpy.ops.object.mode_set(mode='OBJECT')
-	
+
 def project(images, object):
+	'''
+	Re-texturizes an object with projected textures
+	Requires the separate UV Perspective Project addon
+	'''
 	scene = context.scene
 	object.data.materials.clear()
 
@@ -144,23 +176,11 @@ def project(images, object):
 		uvp.cameras_settings[-1].material_slot_name = mat.name
 	
 	bpy.ops.object.uvperspectiveprojectoperator('EXEC_DEFAULT')
-	
-def depth_map(camera, filepath, id=""):
-	if id == "":
-		id = camera.name
-		
-	context.scene.camera = camera								
-	print("Rendering depth from %s" % (id))
-	
-	context.scene.render.image_settings.file_format = 'OPEN_EXR'
-	context.scene.render.image_settings.color_mode = 'BW'
-	
-	context.scene.render.filepath = "%s_%s.exr" % (filepath, id)
-	context.scene.render.resolution_x = camera["render_size"][0]
-	context.scene.render.resolution_y = camera["render_size"][1]
-	bpy.ops.render.render(write_still=True)
-	
+
 def render(camera, filepath, id=""):
+	'''
+	Renders the scene from a camera.
+	'''
 	if id == "":
 		id = camera.name
 		
@@ -177,51 +197,59 @@ def render(camera, filepath, id=""):
 	bpy.ops.render.render(write_still=True)
 	
 def render_lerp(filepath):
+	'''
+	Renders all camera locations between Cam0 and Cam1
+	'''
 	lerp_camera = context.scene.objects["CamC"]
 	for i, lerp in enumerate(np.linspace(-max_angle, max_angle, num=num_captures)):
 		lerp_camera.matrix_world = yaw_look_at(mid_cam_pos, centre, lerp)
 		render(lerp_camera, filepath, i / (num_captures - 1))
+
+def capture(model):
+	reset_scene()
+		
+	# Find first .obj file
+	obj_files = [y for x in os.walk(model) for y in glob(os.path.join(x[0], '*.obj'))]
+	filepath_src = obj_files[0]
+	filepath_dst = os.path.join(model, "renders")
+	if not os.path.exists(filepath_dst):
+		os.makedirs(filepath_dst)
+		
+	# Paths for pre-projection and post-projection
+	filepath_pre = os.path.join(filepath_dst, "view")
+	filepath_post = os.path.join(filepath_dst, "proj")
+
+	print("Importing %s" % (filepath_src))
+	bpy.ops.import_scene.obj(filepath=filepath_src, use_split_objects=False, use_split_groups=False)
+	object = context.scene.objects[-1]
 	
-def render_all(filepath):
-	render(context.scene.objects["Cam0"], filepath)
-	render(context.scene.objects["Cam1"], filepath)
-	render_lerp(filepath)
-	#depth_map(context.scene.objects["Cam0"], filepath)
-	#depth_map(context.scene.objects["Cam1"], filepath)
-
-def capture(files):
+	setup_scene()
+	cam0 = context.scene.objects["Cam0"]
+	cam1 = context.scene.objects["Cam1"]
+	
+	# Pre-projection
+	render(cam0, filepath_pre)
+	render(cam1, filepath_pre)
+	render_lerp(filepath_pre)
+	
+	# Projection
+	images = []
+	images.append(bpy.data.images.load(filepath_pre + "_Cam0.png"))
+	images.append(bpy.data.images.load(filepath_pre + "_Cam1.png"))
+	imperfect(object, [cam0.location, cam1.location])
+	project(images, object)
+	
+	# Post-projection
+	render_lerp(filepath_post)
+	
+	# Optional: save .blend file
+	#bpy.ops.wm.save_as_mainfile(filepath=filepath_dst + ".blend", check_existing=False)
+	
+def run(files):
 	for model in files:
-		reset_scene()
-		
-		obj_files = [y for x in os.walk(model) for y in glob(os.path.join(x[0], '*.obj'))]
-		filepath_src = obj_files[0]
-		filepath_dst = os.path.join(model, "renders")
-		if not os.path.exists(filepath_dst):
-			os.makedirs(filepath_dst)
-			
-		filepath_pre = os.path.join(filepath_dst, "view")
-		filepath_post = os.path.join(filepath_dst, "proj")
-
-		print("Importing %s" % (filepath_src))
-		bpy.ops.import_scene.obj(filepath=filepath_src, use_split_objects=False, use_split_groups=False)
-		object = context.scene.objects[-1]
-		
-		setup_scene()
-		cam0 = bpy.data.objects["Cam0"]
-		cam1 = bpy.data.objects["Cam1"]
-		render_all(filepath_pre)
-		
-		images = []
-		images.append(bpy.data.images.load(filepath_pre + "_Cam0.png"))
-		images.append(bpy.data.images.load(filepath_pre + "_Cam1.png"))
-		
-		imperfect(object, [cam0.location, cam1.location])
-		project(images, object)
-		render_lerp(filepath_post)
-		
-		#bpy.ops.wm.save_as_mainfile(filepath=filepath_dst + ".blend", check_existing=False)
+		capture(model)
 
 if __name__ == "__main__":
 	argv = sys.argv
 	argv = argv[argv.index("--") + 1:]  # get all args after "--"
-	capture(argv)
+	run(argv)
