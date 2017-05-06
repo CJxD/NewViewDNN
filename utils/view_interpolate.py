@@ -4,20 +4,32 @@ import sys
 import numpy as np
 from glob import glob
 
-from mathutils import Vector
+from mathutils import Vector, Matrix
 
 context = bpy.context
 camera_size = Vector((1024, 1024))
 texture_size = Vector((1024, 1024))
-lerp_interval = 0.2
+num_captures = 6
 
 mesh_simplify = 0.3
 mesh_confidence = 0.9
 
-cam_pos_0 = Vector((-0.3, 0.9, 0.12))
-cam_rot_0 = Vector((1.449, 0.0, -2.793))
-cam_pos_1 = Vector((-0.3, -0.9, 0.12))
-cam_rot_1 = Vector((1.449, 0.0, -0.394))
+mid_cam_pos = Vector((-1, 0, 0.1))
+centre = Vector((0, 0, 0))
+max_angle = np.pi / 3
+
+def look_at(pos, target):
+	direction = target - pos
+	rot_quat = direction.to_track_quat('-Z', 'Y')
+	
+	return rot_quat.to_matrix().to_4x4()
+	
+def yaw_look_at(pos, target, yaw):
+	local_rot = look_at(pos, target)
+	trans = Matrix.Translation(pos)
+	yaw = Matrix.Rotation(yaw, 4, Vector((0,0,1)))
+	
+	return yaw * trans * local_rot
 
 def reset_scene():
 	bpy.ops.wm.read_factory_settings()
@@ -59,13 +71,11 @@ def setup_scene():
 
 	# Projection cameras
 	cam0 = bpy.data.objects.new("Cam0", camera_data)
-	cam0.location = cam_pos_0
-	cam0.rotation_euler = cam_rot_0
+	cam0.matrix_world = yaw_look_at(mid_cam_pos, centre, -max_angle)
 	cam0["render_size"] = texture_size
 	scene.objects.link(cam0)
 	cam1 = bpy.data.objects.new("Cam1", camera_data)
-	cam1.location = cam_pos_1
-	cam1.rotation_euler = cam_rot_1
+	cam1.matrix_world = yaw_look_at(mid_cam_pos, centre, max_angle)
 	cam1["render_size"] = texture_size
 	scene.objects.link(cam1)
 	
@@ -168,10 +178,9 @@ def render(camera, filepath, id=""):
 	
 def render_lerp(filepath):
 	lerp_camera = context.scene.objects["CamC"]
-	for lerp in np.arange(0, 1 + lerp_interval, lerp_interval):
-		lerp_camera.location = cam_pos_0.lerp(cam_pos_1, lerp)
-		lerp_camera.rotation_euler = cam_rot_0.lerp(cam_rot_1, lerp)
-		render(lerp_camera, filepath, lerp)
+	for i, lerp in enumerate(np.linspace(-max_angle, max_angle, num=num_captures)):
+		lerp_camera.matrix_world = yaw_look_at(mid_cam_pos, centre, lerp)
+		render(lerp_camera, filepath, i / (num_captures - 1))
 	
 def render_all(filepath):
 	render(context.scene.objects["Cam0"], filepath)
@@ -198,22 +207,19 @@ def capture(files):
 		object = context.scene.objects[-1]
 		
 		setup_scene()
+		cam0 = bpy.data.objects["Cam0"]
+		cam1 = bpy.data.objects["Cam1"]
 		render_all(filepath_pre)
 		
 		images = []
 		images.append(bpy.data.images.load(filepath_pre + "_Cam0.png"))
 		images.append(bpy.data.images.load(filepath_pre + "_Cam1.png"))
 		
-		imperfect(object, [cam_pos_0, cam_pos_1])
+		imperfect(object, [cam0.location, cam1.location])
 		project(images, object)
 		render_lerp(filepath_post)
 		
 		#bpy.ops.wm.save_as_mainfile(filepath=filepath_dst + ".blend", check_existing=False)
-
-if __name__ == "__main__":
-	argv = sys.argv
-	argv = argv[argv.index("--") + 1:]  # get all args after "--"
-	capture(argv)e_as_mainfile(filepath=filepath_dst + ".blend", check_existing=False)
 
 if __name__ == "__main__":
 	argv = sys.argv
