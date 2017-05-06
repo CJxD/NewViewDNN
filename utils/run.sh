@@ -2,11 +2,9 @@
 
 if [ $# -lt 1 ]
 then
-	echo 1>&2 "Usage: run.sh <path to collection>"
+	echo 1>&2 "Usage: run.sh <collection id>"
 	exit 1
 fi
 
-for model in $1/*
-do
-	blender -b -P C:/Users/Chris/OneDrive/Documents/ACS/Project/NewViewDNN/utils/view_interpolate.py -- $model
-done
+basepath="C:/Users/Chris/OneDrive/Documents/ACS/Project/NewViewDNN"
+find "$basepath/data/shapenet/$1" -maxdepth 1 -type d | parallel --retries 3 --joblog preprocess.log --max-lines 20 blender -b -P "$basepath/utils/view_interpolate.py" --

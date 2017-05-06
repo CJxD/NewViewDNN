@@ -6,7 +6,7 @@ base_path = dirname(dirname(realpath(__file__)))
 
 def main(args):
 	if len(args) > 1:
-		print >> sys.stderr, "Usage: create_inputs.py [collection id]"
+		print("Usage: create_inputs.py [collection id]", file=sys.stderr)
 		return 1
 		
 	if len(args) == 1:
@@ -16,14 +16,21 @@ def main(args):
 	
 	with \
 		open(join(base_path, "data", "shapenet", "splits.csv"), 'r') as splits, \
-		open(join(base_path, "data", "train_camA.txt"), 'w') as train_camA, \
-		open(join(base_path, "data", "train_camB.txt"), 'w') as train_camB, \
-		open(join(base_path, "data", "train_camO.txt"), 'w') as train_camO, \
+		open(join(base_path, "data", "train_cam0.txt"), 'w') as train_cam0, \
+		open(join(base_path, "data", "train_cam1.txt"), 'w') as train_cam1, \
+		open(join(base_path, "data", "train_proj.txt"), 'w') as train_proj, \
 		open(join(base_path, "data", "train_params.txt"), 'w') as train_params, \
-		open(join(base_path, "data", "test_camA.txt"), 'w') as test_camA, \
-		open(join(base_path, "data", "test_camB.txt"), 'w') as test_camB, \
-		open(join(base_path, "data", "test_camO.txt"), 'w') as test_camO, \
-		open(join(base_path, "data", "test_params.txt"), 'w') as test_params:
+		open(join(base_path, "data", "train_out.txt"), 'w') as train_out, \
+		open(join(base_path, "data", "val_cam0.txt"), 'w') as val_cam0, \
+		open(join(base_path, "data", "val_cam1.txt"), 'w') as val_cam1, \
+		open(join(base_path, "data", "val_proj.txt"), 'w') as val_proj, \
+		open(join(base_path, "data", "val_params.txt"), 'w') as val_params, \
+		open(join(base_path, "data", "val_out.txt"), 'w') as val_out, \
+		open(join(base_path, "data", "test_cam0.txt"), 'w') as test_cam0, \
+		open(join(base_path, "data", "test_cam1.txt"), 'w') as test_cam1, \
+		open(join(base_path, "data", "test_proj.txt"), 'w') as test_proj, \
+		open(join(base_path, "data", "test_params.txt"), 'w') as test_params, \
+		open(join(base_path, "data", "test_out.txt"), 'w') as test_out:
 		header = None
 		for line in splits:
 			if not header:
@@ -38,29 +45,36 @@ def main(args):
 				
 			id = entry[3]
 			split = entry[4]
-			dir = join(base_path, "data", "shapenet", '0' + str(synsetId), id, "models")
+			dir = join(base_path, "data", "shapenet", '0' + str(synsetId), id, "renders")
 			
-			if not exists(join(dir, "model_normalized_0.5.png")):
+			if not exists(join(dir, "proj_1.0.png")):
 				continue
 
 			if split == "train":
-				camA = train_camA
-				camB = train_camB
-				camO = train_camO
+				cam0 = train_cam0
+				cam1 = train_cam1
+				proj = train_proj
 				params = train_params
+				out = train_out
 			elif split == "val":
-				camA = test_camA
-				camB = test_camB
-				camO = test_camO
-				params = test_params
+				cam0 = val_cam0
+				cam1 = val_cam1
+				proj = val_proj
+				params = val_params
+				out = val_out
 			elif split == "test":
-				continue
+				cam0 = test_cam0
+				cam1 = test_cam1
+				proj = test_proj
+				params = test_params
+				out = test_out
 			else:
 				continue
 				
-			print(str(join(dir, "model_normalized_CamA.png")), file=camA)
-			print(str(join(dir, "model_normalized_CamB.png")), file=camB)
-			print(str(join(dir, "model_normalized_0.5.png")), file=camO)
+			print(str(join(dir, "view_0.0.png")), file=cam0)
+			print(str(join(dir, "view_1.0.png")), file=cam1)
+			print(str(join(dir, "proj_0.5.png")), file=proj)
+			print(str(join(dir, "view_0.5.png")), file=out)
 			print(str(0.5), file=params)
 
 if __name__ == '__main__':

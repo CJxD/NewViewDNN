@@ -133,13 +133,16 @@ def SettingsAreOK( context ):
     return False
 
 class UVPerspectiveProjectOperator( bpy.types.Operator ):
-    bl_idname = "lemon.uvperspectiveprojectoperator"
+    bl_idname = "object.uvperspectiveprojectoperator"
     bl_label = "UV Perspective Project"
     bl_options = {'REGISTER'}
 
     @classmethod
     def poll(self, context):
         return context.mode == 'OBJECT' and SettingsAreOK( context )
+
+    def execute(self, context):
+        return self.invoke(context, None)
 
     def invoke(self, context, event):
         scn = context.scene
@@ -155,7 +158,7 @@ class UVPerspectiveProjectOperator( bpy.types.Operator ):
         return { 'FINISHED' }
 
 class UVPerspectiveProjectCamSettingsActions( bpy.types.Operator ):
-    bl_idname = "lemon.uvperspectiveprojectpanelcamlistactions"
+    bl_idname = "object.uvperspectiveprojectpanelcamlistactions"
     bl_label = ""
 
     action = bpy.props.EnumProperty( items = ( ('UP', "Up", ""), ('DOWN', "Down", ""), ('REMOVE', "Remove", ""), ('ADD', "Add", ""), ) )
@@ -208,7 +211,7 @@ class UVPerspectiveProjectCamSettingsPanel( bpy.types.UIList ):
         pass   
 
 class UVPerspectiveProjectPanel( bpy.types.Panel ):
-    bl_idname = 'lemon.uvperspectiveprojectpanel'
+    bl_idname = 'object.uvperspectiveprojectpanel'
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_label = "UV Perspective Project"
