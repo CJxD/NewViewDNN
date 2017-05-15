@@ -26,8 +26,7 @@ mesh_simplify = 0.3
 mesh_confidence = 0.9
 
 def look_at(pos, target):
-	'''
-	Utility function returning a rotation matrix.
+	'''Utility function returning a rotation matrix.
 	Rotates an object at pos to look towards target.
 	'''
 	direction = target - pos
@@ -36,8 +35,7 @@ def look_at(pos, target):
 	return rot_quat.to_matrix().to_4x4()
 	
 def yaw_look_at(pos, target, yaw):
-	'''
-	Utility function returning a full transformation matrix.
+	'''Utility function returning a full transformation matrix.
 	Translates an object to pos, rotates to look towards target,
 	then applies a yaw rotation. A negative value of
 	yaw rotates left, and positive rotates right.
@@ -49,9 +47,7 @@ def yaw_look_at(pos, target, yaw):
 	return yaw * trans * local_rot
 
 def reset_scene():
-	'''
-	Utility function to remove all objects from the current scene.
-	'''
+	'''Utility function to remove all objects from the current scene.'''
 	bpy.ops.wm.read_factory_settings()
 	bpy.ops.wm.addon_enable(module="uv_perspective_project")
 
@@ -64,15 +60,14 @@ def reset_scene():
 			bpy.data.meshes,
 			bpy.data.lamps,
 			bpy.data.cameras,
-			bpy.data.materials
+			bpy.data.materials,
+			bpy.data.images
 			):
 		for id_data in bpy_data_iter:
 			bpy_data_iter.remove(id_data)
 			
 def setup_scene():
-	'''
-	"Lights, camera, ..."
-	'''
+	'''"Lights, camera, ..."'''
 	scene = context.scene
 	
 	# Lighting
@@ -109,9 +104,19 @@ def setup_scene():
 	
 	scene.update()
 	
+def preprocess(object):
+	'''Fixes object inconsistencies.'''
+	context.scene.objects.active = object
+	bpy.ops.object.mode_set(mode='EDIT')
+	
+	# Make surface normals consistent
+	bpy.ops.mesh.select_all(action='SELECT')
+	bpy.ops.mesh.normals_make_consistent(inside=False)
+	
+	bpy.ops.object.mode_set(mode='OBJECT')
+	
 def imperfect(object, origins = [Vector((0,0,0))]):
-	'''
-	Warps an object to emulate imperfections in depth estimation.
+	'''Warps an object to emulate imperfections in depth estimation.
 	origins is a list of camera locations such that depth uncertainty
 	is added along the vector between object vertex and camera location.
 	'''
@@ -141,8 +146,7 @@ def imperfect(object, origins = [Vector((0,0,0))]):
 	bpy.ops.object.mode_set(mode='OBJECT')
 
 def project(images, object):
-	'''
-	Re-texturizes an object with projected textures
+	'''Re-texturizes an object with projected textures
 	Requires the separate UV Perspective Project addon
 	'''
 	scene = context.scene
@@ -178,9 +182,7 @@ def project(images, object):
 	bpy.ops.object.uvperspectiveprojectoperator('EXEC_DEFAULT')
 
 def render(camera, filepath, id=""):
-	'''
-	Renders the scene from a camera.
-	'''
+	'''Renders the scene from a camera.'''
 	if id == "":
 		id = camera.name
 		
@@ -197,9 +199,7 @@ def render(camera, filepath, id=""):
 	bpy.ops.render.render(write_still=True)
 	
 def render_lerp(filepath):
-	'''
-	Renders all camera locations between Cam0 and Cam1
-	'''
+	'''Renders all camera locations between Cam0 and Cam1'''
 	lerp_camera = context.scene.objects["CamC"]
 	for i, lerp in enumerate(np.linspace(-max_angle, max_angle, num=num_captures)):
 		lerp_camera.matrix_world = yaw_look_at(mid_cam_pos, centre, lerp)
@@ -210,6 +210,9 @@ def capture(model):
 		
 	# Find first .obj file
 	obj_files = [y for x in os.walk(model) for y in glob(os.path.join(x[0], '*.obj'))]
+	if len(obj_files) == 0:
+		raise IOError("No object files found in " + model)
+	
 	filepath_src = obj_files[0]
 	filepath_dst = os.path.join(model, "renders")
 	if not os.path.exists(filepath_dst):
@@ -226,6 +229,9 @@ def capture(model):
 	setup_scene()
 	cam0 = context.scene.objects["Cam0"]
 	cam1 = context.scene.objects["Cam1"]
+	
+	# Pre-process object inconsistencies
+	preprocess(object)
 	
 	# Pre-projection
 	render(cam0, filepath_pre)
@@ -245,11 +251,13 @@ def capture(model):
 	# Optional: save .blend file
 	#bpy.ops.wm.save_as_mainfile(filepath=filepath_dst + ".blend", check_existing=False)
 	
-def run(files):
-	for model in files:
-		capture(model)
+def main(args):
+	with open('view_interpolate.log', 'w') as log:
+		for model in args:
+			capture(model)
+			print(model, file=log)
 
 if __name__ == "__main__":
 	argv = sys.argv
 	argv = argv[argv.index("--") + 1:]  # get all args after "--"
-	run(argv)
+	main(argv)
