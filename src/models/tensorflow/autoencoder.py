@@ -11,58 +11,99 @@ class ConvAutoencoder(object):
         self.encoder = {'weights': [], 'biases': []}
         self.decoder = {'weights': [], 'biases': []}
 
-        self.x = None
-        self.z = None
-        self.y = None
+        self._x = None
+        self._y = None
+        self._z = None
+        self._t = None
         self.loss = None
 
-    def prepare(self, image, target=None):
-        current_input = image
-        self.x = image
-
-        # Build the encoder
-        for layer_i, n_output in enumerate(self.n_filters[1:]):
-            n_output *= image.shape[3].value
-            n_input = current_input.shape[3].value
-            self.shapes.append(current_input.shape.as_list())
-            W = tf.Variable(
+        # Initialise weights
+        for i, n_output in enumerate(self.n_filters[1:]):
+            n_input = self.n_filters[i]
+            
+            encW = tf.Variable(
                 tf.random_uniform([
-                    self.filter_sizes[layer_i],
-                    self.filter_sizes[layer_i],
+                    self.filter_sizes[i],
+                    self.filter_sizes[i],
                     n_input, n_output],
                     -1.0 / math.sqrt(n_input),
                     1.0 / math.sqrt(n_input)))
-            b = tf.Variable(tf.zeros([n_output]))
-            self.encoder['weights'].append(W)
-            self.encoder['biases'].append(b)
-            output = lrelu(
-                tf.add(tf.nn.conv2d(
-                    current_input, W,
-                    strides=[1, 2, 2, 1], padding='SAME'), b))
+
+            encb = tf.Variable(tf.zeros([n_output]))
+ 
+            # Use same weight for encoding and decoding
+            decW = encW
+            decb = tf.Variable(tf.zeros([n_input]))
+
+            self.encoder['weights'].append(encW)
+            self.encoder['biases'].append(encb)
+
+            self.decoder['weights'].insert(0, decW)
+            self.decoder['biases'].insert(0, decb)
+
+    def prepare(self, images, targets=None):
+        self._x = images
+        self._t = targets
+        self.shapes = []
+        current_input = self._x
+
+        # Build the encoder
+        for i, _ in enumerate(self.n_filters[1:]):
+            self.shapes.append(current_input.shape.as_list())
+            W = self.encoder['weights'][i]
+            b = self.encoder['biases'][i]
+
+            conv = tf.nn.conv2d(
+                     current_input, W,
+                     strides=[1, 2, 2, 1], padding='SAME')
+            output = lrelu(tf.add(conv, b))
             current_input = output
 
         # Inner-most latent representation
-        self.z = current_input
+        self._z = current_input
 
-        # Build the decoder using the same weights
-        weights = list(reversed(self.encoder['weights']))
-        shapes = list(reversed(self.shapes))
-        for layer_i, shape in enumerate(shapes):
-            W = weights[layer_i]
-            b = tf.Variable(tf.zeros([W.shape[2].value]))
-            self.decoder['weights'].append(W)
-            self.decoder['biases'].append(b)
-            output = lrelu(tf.add(
-                tf.nn.conv2d_transpose(
-                    current_input, W, shape,
-                    strides=[1, 2, 2, 1], padding='SAME'), b))
+        # Build the decoder
+        for i, shape in enumerate(self.shapes[::-1]):
+            W = self.decoder['weights'][i]
+            b = self.decoder['biases'][i]
+
+            deconv = tf.nn.conv2d_transpose(
+                       current_input, W, shape,
+                       strides=[1, 2, 2, 1], padding='SAME')
+            output = lrelu(tf.add(deconv, b))
             current_input = output
 
-        self.y = output
+        self._y = output
 
-        if target is not None:
+        if self._t is not None:
             # Euclidean loss
-            self.loss = tf.reduce_sum(tf.square(self.y - target))
+            self.loss = tf.reduce_sum(tf.square(self._y - self._t))
         else:
             self.loss = None
+
+        return self
+
+    @property
+    def input(self):
+        return self._x
+
+    @input.setter
+    def input(self, x):
+        self.prepare(x, self._t)
+
+    @property
+    def targets(self):
+        return self._t
+
+    @targets.setter
+    def targets(self, t):
+        self.prepare(self._x, t)
+
+    @property
+    def output(self):
+        return self._y
+
+    @property
+    def latent_state(self):
+        return self._z
 

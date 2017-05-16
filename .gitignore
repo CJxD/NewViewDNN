@@ -45,3 +45,7 @@ Makefile
 *.exe
 *.out
 *.app
+
+# Python
+*.pyc
+__pycache__

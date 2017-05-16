@@ -13,14 +13,14 @@ usage +="       or\n"
 usage +="       32x32-conv-autoencoder.py run <path to inputs> <path to outputs>"
 
 # Data parameters
-batch_size = 256
+batch_size = 1
 shuffle = True
 input_dtype=tf.uint8
 dtype=tf.float32
 
 input_h = input_w = 1024
 input_ch = 3
-patch_h = patch_w = 32
+patch_h = patch_w = 1024
 image_patch_ratio = patch_h * patch_w / (input_h * input_w)
 
 # Training parameters
@@ -31,8 +31,8 @@ display_step = 1
 examples_to_show = 10
 
 # Network Parameters
-filter_sizes = [3, 3, 3, 3]
-n_filters = [n * input_ch for n in [1, 10, 10, 10]]
+filter_sizes = [11, 7, 5, 3]
+n_filters = [1, 8, 16, 32]
 
 def read_files(image_list):
     filename_queue = tf.train.string_input_producer(image_list, num_epochs=n_epochs)
@@ -44,13 +44,6 @@ def read_files(image_list):
     image.set_shape((input_h, input_w, input_ch))
 
     return image
-
-def add_noise(image, mean=0.0, stddev=0.5):
-    noise = tf.random_normal(shape=image.shape,
-              mean=0.0, stddev=stddev,
-              dtype=dtype)
-
-    return image + noise
 
 def generate_patches(image):
     patch_size = [1, patch_h, patch_w, 1]
@@ -76,10 +69,8 @@ def batch(images):
             enqueue_many=True,
             capacity=capacity)
 
-def prepare_batches(image_list, noise=0):
-    if noise > 0:
-
-    return batch(generate_patches(noise(read_files(image_list))))
+def prepare_batches(image_list):
+    return batch(generate_patches(read_files(image_list)))
 
 def reconstruct_image(patches):
     image = tf.reshape(patches, [1, input_h, input_w, input_ch])
@@ -137,7 +128,7 @@ def main(args):
     if mode == 'train':
         optimizer = tf.train.AdamOptimizer(learning_rate).minimize(net.loss)
     elif mode == 'run':
-        image = reconstruct_image(net.output)
+        image = reconstruct_image(net.y)
 
     saver = tf.train.Saver()
 
@@ -162,23 +153,22 @@ def main(args):
 
         # Main loop
         try:
-            i = 1
+            i = 0
             start_time = time.time()
             while not coord.should_stop():
                 batch_time = time.time()
 
                 # Train
                 if mode == 'train':
+                    # Run training steps or whatever
                     print("Training batch %d/%d" % (i, n_batches))
                     _, loss = sess.run([optimizer, net.loss])
                     print("Loss per patch:", loss // batch_size)
 
-                # Validate
                 elif mode == 'validate':
                     print("Validating batch %d/%d" % (i, n_batches))
                     loss.append(sess.run([net.loss]))
 
-                # Generate outputs
                 elif mode == 'run':
                     print("Processing image %d/%d" % (i, n_batches))
                     tag = str(i)

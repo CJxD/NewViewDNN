@@ -45,8 +45,8 @@ def lrelu(x, leak=0.2, name="lrelu"):
 
 # %%
 def autoencoder(input_shape=[None, 784],
-                n_filters=[1, 32, 64],
-                filter_sizes=[5, 5, 3],
+                n_filters=[1, 10, 10, 10],
+                filter_sizes=[3, 3, 3, 3],
                 corruption=False):
     """Build a deep denoising autoencoder w/ tied weights.
 
@@ -179,7 +179,7 @@ def test_mnist():
             batch_xs, _ = mnist.train.next_batch(batch_size)
             train = np.array([img - mean_img for img in batch_xs])
             sess.run(optimizer, feed_dict={ae['x']: train})
-        if epoch % display_step == 0:
+        if epoch_i % display_step == 0:
             print(epoch_i, sess.run(ae['cost'], feed_dict={ae['x']: train}))
 
     # %%
@@ -191,11 +191,11 @@ def test_mnist():
     fig, axs = plt.subplots(2, examples_to_show, figsize=(10, 2))
     for example_i in range(examples_to_show):
         axs[0][example_i].imshow(
-            np.reshape(test_xs[example_i, :], (input_w, input_h)))
+            np.reshape(test_xs[example_i, :], (input_h, input_w)))
         axs[1][example_i].imshow(
             np.reshape(
-                np.reshape(recon[example_i, ...], (input_w * input_h,)) + mean_img,
-                (28, 28)))
+                np.reshape(recon[example_i, ...], (input_h * input_w,)) + mean_img,
+                (input_h, input_w)))
     fig.show()
     plt.draw()
     plt.waitforbuttonpress()
