@@ -189,13 +189,15 @@ def render(camera, filepath, id=""):
 	context.scene.camera = camera								
 	print("Rendering from %s" % (id))
 	
-	context.scene.render.image_settings.file_format = 'PNG'
-	context.scene.render.image_settings.color_mode = 'RGB'
+	settings = context.scene.render
+	settings.image_settings.file_format = 'PNG'
+	settings.image_settings.color_mode = 'RGBA'
+	settings.alpha_mode = 'TRANSPARENT'
 	
-	context.scene.render.filepath = "%s_%s.png" % (filepath, id)
-	context.scene.render.resolution_x = camera["render_size"][0]
-	context.scene.render.resolution_y = camera["render_size"][1]
-	context.scene.render.resolution_percentage = 100
+	settings.filepath = "%s_%s.png" % (filepath, id)
+	settings.resolution_x = camera["render_size"][0]
+	settings.resolution_y = camera["render_size"][1]
+	settings.resolution_percentage = 100
 	bpy.ops.render.render(write_still=True)
 	
 def render_lerp(filepath):

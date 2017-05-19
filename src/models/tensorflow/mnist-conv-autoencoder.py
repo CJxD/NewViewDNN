@@ -23,7 +23,7 @@ input_ch = 1
 # Training parameters
 model_file = 'checkpoints/model.ckpt'
 learning_rate = 0.01
-n_epochs = 10
+n_epochs = 1
 display_step = 1
 examples_to_show = 10
 

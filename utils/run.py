@@ -4,7 +4,7 @@ import sys, os
 from subprocess import call
 from glob import glob
 
-models_per_run = 10
+models_per_run = 100
 parallel_processes = 1
 
 script = "C:/Users/Chris/OneDrive/Documents/ACS/Project/NewViewDNN/utils/view_interpolate.py"

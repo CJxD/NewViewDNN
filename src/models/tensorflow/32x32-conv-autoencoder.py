@@ -22,6 +22,7 @@ input_h = input_w = 1024
 input_ch = 3
 patch_h = patch_w = 32
 image_patch_ratio = patch_h * patch_w / (input_h * input_w)
+input_noise = 0.5
 
 # Training parameters
 model_file = 'checkpoints/model.ckpt'
@@ -78,12 +79,15 @@ def batch(images):
 
 def prepare_batches(image_list, noise=0):
     if noise > 0:
+        noise_fn = lambda x: add_noise(x, stddev=noise)
+    else:
+        noise_fn = lambda x: x
 
-    return batch(generate_patches(noise(read_files(image_list))))
+    return batch(generate_patches(noise_fn(read_files(image_list))))
 
 def reconstruct_image(patches):
     image = tf.reshape(patches, [1, input_h, input_w, input_ch])
-    converted = tf.image.convert_image_dtype(patches[512], input_dtype)
+    converted = tf.image.convert_image_dtype(image[0], input_dtype)
     encoded = tf.image.encode_png(converted)
 
     return encoded
@@ -121,7 +125,10 @@ def main(args):
     
     n_patches = n_examples * n_epochs // image_patch_ratio
     n_batches = n_patches // batch_size
-    input_batches = prepare_batches(inputs)
+    if mode == 'train':
+        input_batches = prepare_batches(inputs, noise=input_noise)
+    else:
+        input_batches = prepare_batches(inputs)
 
     if mode in ('train', 'validate'):
         with open(target_list, 'r') as target_set:
@@ -162,7 +169,7 @@ def main(args):
 
         # Main loop
         try:
-            i = 1
+            i = 0
             start_time = time.time()
             while not coord.should_stop():
                 batch_time = time.time()
