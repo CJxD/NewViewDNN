@@ -28,8 +28,8 @@ display_step = 1
 examples_to_show = 10
 
 # Network Parameters
-filter_sizes = [3, 3, 3, 3]
-n_filters = [1, 10, 10, 10]
+filter_sizes = [3, 3, 3]
+n_filters = [10, 10, 10]
 
 def batch(images):
     min_after_dequeue = 10000
@@ -59,8 +59,8 @@ def main(args):
     batches = batch(examples)
     n_batches = mnist.train.num_examples * n_epochs // batch_size
 
-    net = ConvAutoencoder(n_filters, filter_sizes)
-    net.prepare(batches, batches)
+    net = ConvAutoencoder(filter_sizes, n_filters, input_ch)
+    net.build(batches, batches)
     optimizer = tf.train.AdamOptimizer(learning_rate).minimize(net.loss)
 
     # Initialize session and graph
@@ -99,7 +99,7 @@ def main(args):
         test, _ = mnist.test.next_batch(examples_to_show)
         test_norm = np.array([img - mean_img for img in test])
         examples = tf.reshape(test, [-1, input_h, input_w, input_ch])
-        net.prepare(examples, None)
+        net.build(examples, None)
         recon = sess.run(net.output)
         fig, axs = plt.subplots(2, examples_to_show, figsize=(10, 2))
         for example_i in range(examples_to_show):

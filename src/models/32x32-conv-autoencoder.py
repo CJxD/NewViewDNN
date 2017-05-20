@@ -30,8 +30,8 @@ display_step = 1
 examples_to_show = 10
 
 # Network Parameters
-filter_sizes = [3, 3, 3, 3]
-n_filters = [n * input_ch for n in [1, 10, 10, 10]]
+filter_sizes = [3, 3, 3]
+n_filters = [n * input_ch for n in [10, 10, 10]]
 
 def read_files(image_list):
     filename_queue = tf.train.string_input_producer(image_list, num_epochs=n_epochs, shuffle=shuffle)
@@ -168,8 +168,8 @@ def main(args):
     else:
         target_batches = None
 
-    net = ConvAutoencoder(n_filters, filter_sizes)
-    net.prepare(input_batches, target_batches)
+    net = ConvAutoencoder(filter_sizes, n_filters, input_ch)
+    net.build(input_batches, target_batches)
 
     if mode == 'train':
         optimizer = tf.train.AdamOptimizer(learning_rate).minimize(net.loss)
@@ -189,7 +189,7 @@ def main(args):
 
             try:
                 saver.restore(sess, model_file)
-            except tf.errors.InvalidArgumentError:
+            except tf.errors.OpError:
                 # Incompatible model
                 print("Could not load model - initialising new session")
                 sess.run(tf.global_variables_initializer())
