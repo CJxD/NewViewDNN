@@ -36,7 +36,10 @@ class ConvAutoencoder(object):
             # Initialise convolution biases
             self.biases['conv' + id] = tf.Variable(tf.zeros([n_output]))
 
+            # Initialise deconvolution kernels to same weights as paired convolution
             self.weights['deconv' + id] = self.weights['conv' + id]
+
+            # Initialise deconvolution biases
             self.biases['deconv' + id] = tf.Variable(tf.zeros([n_input]))
 
     def build(self, images, targets=None):
