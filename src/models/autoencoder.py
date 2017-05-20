@@ -21,6 +21,7 @@ class ConvAutoencoder(object):
         for i, n_output in enumerate(self.n_filters[1:]):
             n_input = self.n_filters[i]
             
+            # Initialise weights
             encW = tf.Variable(
                 tf.random_uniform([
                     self.filter_sizes[i],
@@ -31,8 +32,8 @@ class ConvAutoencoder(object):
 
             encb = tf.Variable(tf.zeros([n_output]))
  
-            # Use same weight for encoding and decoding
             decW = encW
+
             decb = tf.Variable(tf.zeros([n_input]))
 
             self.encoder['weights'].append(encW)
