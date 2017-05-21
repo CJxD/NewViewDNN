@@ -35,7 +35,7 @@ filter_sizes = [3, 3, 3]
 n_filters = [n * input_ch for n in [10, 10, 10]]
 
 def read_files(image_list):
-    filename_queue = tf.train.string_input_producer(image_list, num_epochs=n_epochs, shuffle=shuffle)
+    filename_queue = tf.train.string_input_producer(image_list, num_epochs=n_epochs, shuffle=False)
 
     reader = tf.WholeFileReader()
     _, image_file = reader.read(filename_queue)
@@ -52,29 +52,21 @@ def add_noise(image, mean=0.0, stddev=0.5):
 
     return image + noise
 
-def batch(images):
+def batch(tensors):
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
 
     if shuffle:
-        return tf.train.shuffle_batch([images],
+        return tf.train.shuffle_batch(tensors,
             batch_size=batch_size,
             enqueue_many=True,
             capacity=capacity,
             min_after_dequeue=min_after_dequeue)
     else:
-        return tf.train.batch([images],
+        return tf.train.batch(tensors,
             batch_size=batch_size,
             enqueue_many=True,
             capacity=capacity)
-
-def prepare_batches(image_list, noise=0):
-    if noise > 0:
-        noise_fn = lambda x: add_noise(x, stddev=noise)
-    else:
-        noise_fn = lambda x: x
-
-    return batch(generate_patches(noise_fn(read_files(image_list))))
 
 def generate_patches(image):
     '''Splits an image into patches of size patch_h x patch_w
@@ -156,17 +148,22 @@ def main(args):
     
     n_patches = n_examples * n_epochs // image_patch_ratio
     n_batches = n_patches // batch_size
-    if mode == 'train':
-        input_batches = prepare_batches(inputs, noise=input_noise)
-    else:
-        input_batches = prepare_batches(inputs)
+    
+    input_data = read_files(inputs)
+    if input_noise > 0 and mode == 'train':
+        input_data = add_noise(input_data, input_noise)
+    input_patches = generate_patches(input_data)
 
     if mode in ('train', 'validate'):
         with open(target_list, 'r') as target_set:
             targets = target_set.read().splitlines()
 
-        target_batches = prepare_batches(targets)
+        target_data = read_files(targets)
+        target_patches = generate_patches(target_data)
+
+        input_batches, target_batches = batch([input_patches, target_patches])
     else:
+        input_batches = batch([input_patches])
         target_batches = None
 
     net = ConvAutoencoder(filter_sizes, n_filters, input_ch)
