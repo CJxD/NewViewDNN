@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import tensorflow as tf
 import sys
 import re
 from os.path import *
@@ -7,6 +8,15 @@ from glob import glob
 base_path = dirname(dirname(realpath(__file__)))
 
 usage = "Usage: create_inputs.py [collection id, ...]"
+
+def _bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+def _int64_feature(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+def _float_feature(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
 def main(args):
 	if len(args) >= 1:
@@ -20,17 +30,10 @@ def main(args):
 
 	proj_pat = re.compile(r'.*/proj_(.+)\.png')
 	
-	with \
-		open(join(base_path, "data", ".shapenet", "splits.csv"), 'r') as splits, \
-		open(join(base_path, "data", "train_proj.txt"), 'w') as train_proj, \
-		open(join(base_path, "data", "train_params.txt"), 'w') as train_params, \
-		open(join(base_path, "data", "train_out.txt"), 'w') as train_out, \
-		open(join(base_path, "data", "val_proj.txt"), 'w') as val_proj, \
-		open(join(base_path, "data", "val_params.txt"), 'w') as val_params, \
-		open(join(base_path, "data", "val_out.txt"), 'w') as val_out, \
-		open(join(base_path, "data", "test_proj.txt"), 'w') as test_proj, \
-		open(join(base_path, "data", "test_params.txt"), 'w') as test_params, \
-		open(join(base_path, "data", "test_out.txt"), 'w') as test_out:
+	with open(join(base_path, "data", ".shapenet", "splits.csv"), 'r') as splits, \
+		tf.python_io.TFRecordWriter(join(base_path, "data", "train.tfrecords")) as train, \
+		tf.python_io.TFRecordWriter(join(base_path, "data", "val.tfrecords")) as val, \
+		tf.python_io.TFRecordWriter(join(base_path, "data", "test.tfrecords")) as test:
 		header = None
 		for line in splits:
 			if not header:
@@ -38,27 +41,24 @@ def main(args):
 				continue
 				
 			entry = line.strip().split(',')
-			synsetId = int(entry[1])
+			synset_num = int(entry[1])
 			
-			if collections is not None and synsetId not in collections:
+			if collections is not None and synset_num not in collections:
 				continue
-				
+			
+			synset_id = '0' + str(synset_num)
 			id = entry[3]
 			split = entry[4]
-			dir = join(base_path, "data", ".shapenet", '0' + str(synsetId), id, "renders")
+			dir = join(base_path, "data", ".shapenet", synset_id, id, "renders")
+
+			print("Processing %s/%s" % (synset_id, id))
 
 			if split == "train":
-				proj = train_proj
-				params = train_params
-				out = train_out
+				records = train
 			elif split == "val":
-				proj = val_proj
-				params = val_params
-				out = val_out
+				records = val
 			elif split == "test":
-				proj = test_proj
-				params = test_params
-				out = test_out
+				records = test
 			else:
 				continue
 
@@ -67,9 +67,23 @@ def main(args):
 					matches = proj_pat.match(file)
 					angle = matches.group(1)
 
-					print(str(join(dir, "proj_%s.png" % angle)), file=proj)
-					print(str(join(dir, "view_%s.png" % angle)), file=out)
-					print(angle, file=params)
+					input_name = join(dir, "proj_%s.png" % angle)
+					target_name = join(dir, "view_%s.png" % angle)
+
+					with tf.gfile.FastGFile(input_name, 'rb') as input_file, \
+						tf.gfile.FastGFile(target_name, 'rb') as target_file:
+
+						input_image = input_file.read()
+						target_image = target_file.read()
+
+						example = tf.train.Example(features=tf.train.Features(feature={
+							'collection': _bytes_feature(tf.compat.as_bytes(synset_id)),
+							'model': _bytes_feature(tf.compat.as_bytes(id)),
+							'angle': _float_feature(float(angle)),
+							'input_image': _bytes_feature(tf.compat.as_bytes(input_image)),
+							'target_image': _bytes_feature(tf.compat.as_bytes(target_image))}))
+    
+					records.write(example.SerializeToString())
 				except:
 					pass
 

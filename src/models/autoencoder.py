@@ -116,11 +116,11 @@ class ConvAutoencoder(object):
         self.build(x, self._t)
 
     @property
-    def targets(self):
+    def target(self):
         return self._t
 
-    @targets.setter
-    def targets(self, t):
+    @target.setter
+    def target(self, t):
         self.build(self._x, t)
 
     @property
