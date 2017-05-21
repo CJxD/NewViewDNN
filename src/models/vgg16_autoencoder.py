@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 import tensorflow as tf
+import numpy as np
 import math
 
 from utils import lrelu
@@ -7,67 +8,110 @@ from utils import lrelu
 activation_fn = tf.nn.relu
 
 class VGG16Autoencoder(object):
-    def __init__(self, image_channels=1):
-        self.weights = {}
-        self.biases = {}
+    def __init__(self, image_channels=1, pretrained_path=None):
+        self.data = {}
 
         self._x = None
         self._y = None
         self._z = None
         self._t = None
         self.loss = None
-  
-        # Initialise convolution kernel weights
-        self.weights['conv1_1'] = self.make_kernel([3, 3], image_channels, 64)
-        self.weights['conv1_2'] = self.make_kernel([3, 3], 64, 64)
 
-        self.weights['conv2_1'] = self.make_kernel([3, 3], 64, 128)
-        self.weights['conv2_2'] = self.make_kernel([3, 3], 128, 128)
+        if pretrained_path is not None:
+            self.load_weights(image_channels, pretrained_path)
+        else:
+            self.init_weights(image_channels)
 
-        self.weights['conv3_1'] = self.make_kernel([3, 3], 128, 256)
-        self.weights['conv3_2'] = self.make_kernel([3, 3], 256, 256)
-        self.weights['conv3_3'] = self.make_kernel([3, 3], 256, 256)
+    def load_weights(self, image_channels, path):
+        if image_channels != 3:
+            raise ValueError("Input must have 3 channels to use pretrained VGG weights")
 
-        self.weights['conv4_1'] = self.make_kernel([3, 3], 256, 512)
-        self.weights['conv4_2'] = self.make_kernel([3, 3], 512, 512)
-        self.weights['conv4_3'] = self.make_kernel([3, 3], 512, 512)
+        self.data = np.load(path, encoding='latin1').item()
+        self.init_deconv(image_channels)
 
-        self.weights['conv5_1'] = self.make_kernel([3, 3], 512, 512)
-        self.weights['conv5_2'] = self.make_kernel([3, 3], 512, 512)
-        self.weights['conv5_3'] = self.make_kernel([3, 3], 512, 512)
+    def init_weights(self, image_channels):
+        self.init_conv(image_channels)
+        self.init_deconv(image_channels)
 
-        # Initialise convolution biases
-        self.biases['conv1_1'] = self.make_bias(64)
-        self.biases['conv1_2'] = self.make_bias(64)
+    def init_conv(self, image_channels):
+        self.data['conv1_1'] = [
+            self.make_kernel([3, 3], image_channels, 64),
+            self.make_bias(64)
+        ]
+        self.data['conv1_2'] = [
+            self.make_kernel([3, 3], 64, 64),
+            self.make_bias(64)
+        ]
 
-        self.biases['conv2_1'] = self.make_bias(128)
-        self.biases['conv2_2'] = self.make_bias(128)
+        self.data['conv2_1'] = [
+            self.make_kernel([3, 3], 64, 128),
+            self.make_bias(128)
+        ]
+        self.data['conv2_2'] = [
+            self.make_kernel([3, 3], 128, 128),
+            self.make_bias(128)
+        ]
 
-        self.biases['conv3_1'] = self.make_bias(256)
-        self.biases['conv3_2'] = self.make_bias(256)
-        self.biases['conv3_3'] = self.make_bias(256)
+        self.data['conv3_1'] = [
+            self.make_kernel([3, 3], 128, 256),
+            self.make_bias(256)
+        ]
+        self.data['conv3_2'] = [
+            self.make_kernel([3, 3], 256, 256),
+            self.make_bias(256)
+        ]
+        self.data['conv3_3'] = [
+            self.make_kernel([3, 3], 256, 256),
+            self.make_bias(256)
+        ]
 
-        self.biases['conv4_1'] = self.make_bias(512)
-        self.biases['conv4_2'] = self.make_bias(512)
-        self.biases['conv4_3'] = self.make_bias(512)
+        self.data['conv4_1'] = [
+            self.make_kernel([3, 3], 256, 512),
+            self.make_bias(512)
+        ]
+        self.data['conv4_2'] = [
+            self.make_kernel([3, 3], 512, 512),
+            self.make_bias(512)
+        ]
+        self.data['conv4_3'] = [
+            self.make_kernel([3, 3], 512, 512),
+            self.make_bias(512)
+        ]
 
-        self.biases['conv5_1'] = self.make_bias(512)
-        self.biases['conv5_2'] = self.make_bias(512)
-        self.biases['conv5_3'] = self.make_bias(512)
+        self.data['conv5_1'] = [
+            self.make_kernel([3, 3], 512, 512),
+            self.make_bias(512)
+        ]
+        self.data['conv5_2'] = [
+            self.make_kernel([3, 3], 512, 512),
+            self.make_bias(512)
+        ]
+        self.data['conv5_3'] = [
+            self.make_kernel([3, 3], 512, 512),
+            self.make_bias(512)
+        ]
 
-        # Initialise deconvolution kernel weights
-        self.weights['deconv5_1'] = self.make_kernel([4, 4], 512, 512)
-        self.weights['deconv4_1'] = self.make_kernel([4, 4], 256, 512)
-        self.weights['deconv3_1'] = self.make_kernel([4, 4], 128, 256)
-        self.weights['deconv2_1'] = self.make_kernel([4, 4], 64, 128)
-        self.weights['deconv1_1'] = self.make_kernel([4, 4], image_channels, 64)
-
-        # Initialise deconvolution biases
-        self.biases['deconv5_1'] = self.make_bias(512)
-        self.biases['deconv4_1'] = self.make_bias(256)
-        self.biases['deconv3_1'] = self.make_bias(128)
-        self.biases['deconv2_1'] = self.make_bias(64)
-        self.biases['deconv1_1'] = self.make_bias(image_channels)
+    def init_deconv(self, image_channels):
+        self.data['deconv5_1'] = [
+            self.make_kernel([4, 4], 512, 512),
+            self.make_bias(512)
+        ]
+        self.data['deconv4_1'] = [
+            self.make_kernel([4, 4], 256, 512),
+            self.make_bias(256)
+        ]
+        self.data['deconv3_1'] = [
+            self.make_kernel([4, 4], 128, 256),
+            self.make_bias(128)
+        ]
+        self.data['deconv2_1'] = [
+            self.make_kernel([4, 4], 64, 128),
+            self.make_bias(64)
+        ]
+        self.data['deconv1_1'] = [
+            self.make_kernel([4, 4], image_channels, 64),
+            self.make_bias(image_channels)
+        ]
 
     def build(self, images, targets=None):
         self._x = images
@@ -156,10 +200,10 @@ class VGG16Autoencoder(object):
         return tf.zeros([n])
 
     def get_kernel(self, name):
-        return self.weights[name]
+        return self.data[name][0]
 
     def get_bias(self, name):
-        return self.biases[name]
+        return self.data[name][1]
 
     @property
     def input(self):
