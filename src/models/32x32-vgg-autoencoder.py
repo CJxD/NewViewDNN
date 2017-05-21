@@ -41,7 +41,7 @@ def read_files(image_list):
     _, image_file = reader.read(filename_queue)
     image = tf.image.decode_png(image_file, channels=input_ch, dtype=input_dtype)
     image = tf.image.convert_image_dtype(image, dtype)
-    image.set_shape((input_h, input_w, input_ch))
+    image = tf.image.resize_images(image, [input_h, input_w])
 
     return image
 
