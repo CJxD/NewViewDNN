@@ -7,9 +7,9 @@ import sys, os, os.path
 from vgg16_autoencoder import VGG16Autoencoder
 from utils import *
 
-usage = "Usage: 32x32-conv-autoencoder.py train/validate <path to inputs> <path to targets>\n"
+usage = "Usage: 32x32-vgg-autoencoder.py train/validate <path to inputs> <path to targets> [path to pretrained model]\n"
 usage +="       or\n"
-usage +="       32x32-conv-autoencoder.py run <path to inputs> <path to outputs>"
+usage +="       32x32-vgg-autoencoder.py run <path to inputs> <path to outputs>"
 
 # Data parameters
 batch_size = 256
@@ -18,7 +18,7 @@ input_dtype=tf.uint8
 dtype=tf.float32
 
 input_h = input_w = 1024
-input_ch = 1
+input_ch = 3
 patch_h = patch_w = 32
 image_patch_ratio = patch_h * patch_w / (input_h * input_w)
 input_noise = 0
@@ -126,13 +126,17 @@ def make_images(data):
 def main(args):
     global n_epochs, batch_size, shuffle
 
-    if len(args) != 3:
+    if len(args) < 3 or len(args) > 4:
         print(usage)
         sys.exit(1)
 
     mode = args[0].lower()
     input_list = args[1]
     output_dir = target_list = args[2]
+    if len(args) == 4:
+        pretrained_path = args[3]
+    else:
+        pretrained_path = None
 
     if mode not in ('train', 'validate', 'run'):
         print(usage)
@@ -169,7 +173,7 @@ def main(args):
     else:
         target_batches = None
 
-    net = VGG16Autoencoder(input_ch)
+    net = VGG16Autoencoder(input_ch, pretrained_path)
     net.build(input_batches, target_batches)
 
     if mode == 'train':
