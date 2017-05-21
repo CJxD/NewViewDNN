@@ -6,15 +6,17 @@ from os.path import *
 from glob import glob
 base_path = dirname(dirname(realpath(__file__)))
 
+usage = "Usage: create_inputs.py [collection id, ...]"
+
 def main(args):
-	if len(args) > 1:
-		print("Usage: create_inputs.py [collection id]", file=sys.stderr)
-		return 1
-		
-	if len(args) == 1:
-		collection = int(args[0])
+	if len(args) >= 1:
+		try:
+			collections = [int(arg) for arg in args]
+		except:
+			print(usage, file=sys.stderr)
+			return 1
 	else:
-		collection = None
+		collections = None
 
 	proj_pat = re.compile(r'.*/proj_(.+)\.png')
 	
@@ -38,7 +40,7 @@ def main(args):
 			entry = line.strip().split(',')
 			synsetId = int(entry[1])
 			
-			if collection and synsetId != collection:
+			if collections is not None and synsetId not in collections:
 				continue
 				
 			id = entry[3]
