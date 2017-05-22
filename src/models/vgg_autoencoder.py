@@ -18,6 +18,7 @@ class VGG16Autoencoder(object):
         self.loss = None
 
         if pretrained_path is not None:
+            print("Using pretrained weights from", pretrained_path)
             self.load_weights(image_channels, pretrained_path)
         else:
             self.init_weights(image_channels)
