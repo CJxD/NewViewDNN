@@ -12,7 +12,7 @@ usage +="       or\n"
 usage +="       32x32-conv-autoencoder.py run <path to inputs> <path to outputs>"
 
 # Data parameters
-batch_size = 1024
+batch_size = 256
 shuffle = False
 input_dtype=tf.uint8
 dtype=tf.float32
@@ -82,39 +82,6 @@ def encode_images(data):
 
     return encode_image(data_queue[0])
 
-def generate_patches(image):
-    '''Splits an image into patches of size patch_h x patch_w
-    Input: image of shape [input_h, input_w, input_ch]
-    Output: batch of patches shape [n, patch_h, patch_w, input_ch]
-    '''
-    pad = [[0, 0], [0, 0]]
-    patch_area = patch_h * patch_w
-
-    patches = tf.space_to_batch_nd([image], [patch_h, patch_w], pad)
-    patches = tf.split(patches, patch_area, 0)
-    patches = tf.stack(patches, 3)
-    patches = tf.reshape(patches, [-1, patch_h, patch_w, input_ch])
-
-    return patches
-
-def reconstruct_patches(patches):
-    '''Reconstructs an image from patches of size patch_h x patch_w
-    Input: batch of patches shape [n, patch_h, patch_w, input_ch]
-    Output: image of shape [input_h, input_w, input_ch]
-    '''
-    pad = [[0, 0], [0, 0]]
-    patch_area = patch_h * patch_w
-    height_ratio = input_h // patch_h
-    width_ratio = input_w // patch_w
-
-    image = tf.reshape(patches, [1, height_ratio, width_ratio, patch_area, input_ch])
-    image = tf.split(image, patch_area, 3)
-    image = tf.stack(image, 0)
-    image = tf.reshape(image, [patch_area, height_ratio, width_ratio, input_ch])
-    image = tf.batch_to_space_nd(image, [patch_h, patch_w], pad)
-
-    return image[0]
-
 def batch(tensors):
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
@@ -140,9 +107,9 @@ def main(args):
         mode = args[0].lower()
 
         if mode in ('train', 'validate'):
-            input_data = args[1]
+            input_path = args[1]
         elif mode in ('run'):
-            input_data = args[1]
+            input_path = args[1]
             output_dir = args[2]
         else:
             raise ValueError("Mode must be one of train/validate/run")
@@ -159,22 +126,28 @@ def main(args):
         batch_size = patches_per_img
 
     # Data loading
-    if os.path.splitext(input_data)[1] == '.tfrecords':
-        input_images, target_images = read_records([input_data])
+    if os.path.splitext(input_path)[1] == '.tfrecords':
+        input_images, target_images = read_records([input_path])
 
-        input_patches = generate_patches(input_images)
-        target_patches = generate_patches(target_images)
+        input_patches = generate_patches(input_images, patch_h, patch_w)
+        target_patches = generate_patches(target_images, patch_h, patch_w)
 
         input_batches, target_batches = batch([input_patches, target_patches])
 
         n_examples = 0
-        for record in tf.python_io.tf_record_iterator(input_data):
+        for record in tf.python_io.tf_record_iterator(input_path):
             n_examples += 1
     else:
+        with open(input_path) as input_file:
+            input_list = input_file.read().splitlines()
+
+        input_images = read_files(input_list)
+        input_patches = generate_patches(input_images, patch_h, patch_w)
         input_batches = batch([input_patches])
+
         target_batches = None
         
-        n_examples = len(inputs)
+        n_examples = len(input_list)
 
     if mode in ('train', 'validate'):
         if target_batches is None:
@@ -195,11 +168,9 @@ def main(args):
     elif mode == 'validate':
         loss = []
     elif mode == 'run':
-        input_data = reconstruct_patches(net.input)
-        target_data = reconstruct_patches(net.target)
-        output_data = reconstruct_patches(net.output)
+        input_data = reconstruct_image(net.input, input_h, input_w)
+        output_data = reconstruct_image(net.output, input_h, input_w)
         input_image = encode_image(input_data)
-        target_image = encode_image(target_data)
         patch_images = encode_images(net.output)
         output_image = encode_image(output_data)
 
