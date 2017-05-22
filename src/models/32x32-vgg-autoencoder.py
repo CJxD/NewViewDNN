@@ -4,16 +4,16 @@ import numpy as np
 import time
 import sys, os, os.path
 
-from vgg16_autoencoder import VGG16Autoencoder
+from vgg_autoencoder import VGG16Autoencoder
 from utils import *
 
-usage = "Usage: 32x32-vgg-autoencoder.py train/validate <path to inputs> <path to targets> [path to pretrained model]\n"
+usage = "Usage: 32x32-vgg-autoencoder.py train/validate <path to examples> [path to pretrained model]\n"
 usage +="       or\n"
 usage +="       32x32-vgg-autoencoder.py run <path to inputs> <path to outputs>"
 
 # Data parameters
 batch_size = 256
-shuffle = True
+shuffle = False
 input_dtype=tf.uint8
 dtype=tf.float32
 
@@ -21,174 +21,168 @@ input_h = input_w = 1024
 input_ch = 3
 patch_h = patch_w = 32
 image_patch_ratio = patch_h * patch_w / (input_h * input_w)
-input_noise = 0
+patches_per_img = int(1 // image_patch_ratio)
 
 # Training parameters
 model_file = 'checkpoints/model.ckpt'
 learning_rate = 0.001
 n_epochs = 1
-display_step = 1
-examples_to_show = 10
 
 # Network Parameters
 filter_sizes = [3, 3, 3]
 n_filters = [n * input_ch for n in [10, 10, 10]]
 
 def read_files(image_list):
-    filename_queue = tf.train.string_input_producer(image_list, num_epochs=n_epochs, shuffle=shuffle)
+    filename_queue = tf.train.string_input_producer(image_list, num_epochs=n_epochs)
 
     reader = tf.WholeFileReader()
     _, image_file = reader.read(filename_queue)
-    image = tf.image.decode_png(image_file, channels=input_ch, dtype=input_dtype)
+
+    return decode_image(image_file)
+
+def read_records(record_list):
+    filename_queue = tf.train.string_input_producer(record_list, num_epochs=n_epochs)
+
+    reader = tf.TFRecordReader()
+    _, example = reader.read(filename_queue)
+
+    features = tf.parse_single_example(
+        example,
+        features={
+            'collection': tf.FixedLenFeature([], tf.string),
+            'model': tf.FixedLenFeature([], tf.string),
+            'angle': tf.FixedLenFeature([], tf.float32),
+            'input_image':  tf.FixedLenFeature([], tf.string),            
+            'target_image': tf.FixedLenFeature([], tf.string, default_value=''),
+        })
+
+    input_image = decode_image(features['input_image'])
+    target_image = decode_image(features['target_image'])
+
+    return input_image, target_image
+
+def decode_image(encoded):
+    image = tf.image.decode_png(encoded, channels=input_ch, dtype=input_dtype)
     image = tf.image.convert_image_dtype(image, dtype)
     image = tf.image.resize_images(image, [input_h, input_w])
 
     return image
 
-def add_noise(image, mean=0.0, stddev=0.5):
-    noise = tf.random_normal(shape=image.shape,
-              mean=0.0, stddev=stddev,
-              dtype=dtype)
-
-    return image + noise
-
-def batch(images):
-    min_after_dequeue = 10000
-    capacity = min_after_dequeue + 3 * batch_size
-
-    if shuffle:
-        return tf.train.shuffle_batch([images],
-            batch_size=batch_size,
-            enqueue_many=True,
-            capacity=capacity,
-            min_after_dequeue=min_after_dequeue)
-    else:
-        return tf.train.batch([images],
-            batch_size=batch_size,
-            enqueue_many=True,
-            capacity=capacity)
-
-def prepare_batches(image_list, noise=0):
-    if noise > 0:
-        noise_fn = lambda x: add_noise(x, stddev=noise)
-    else:
-        noise_fn = lambda x: x
-
-    return batch(generate_patches(noise_fn(read_files(image_list))))
-
-def generate_patches(image):
-    '''Splits an image into patches of size patch_h x patch_w
-    Input: image of shape [input_h, input_w, input_ch]
-    Output: batch of patches shape [n, patch_h, patch_w, input_ch]
-    '''
-    pad = [[0, 0], [0, 0]]
-    patch_area = patch_h * patch_w
-
-    patches = tf.space_to_batch_nd([image], [patch_h, patch_w], pad)
-    patches = tf.split(patches, patch_area, 0)
-    patches = tf.stack(patches, 3)
-    patches = tf.reshape(patches, [-1, patch_h, patch_w, input_ch])
-
-    return patches
-
-def reconstruct_patches(patches):
-    '''Reconstructs an image from patches of size patch_h x patch_w
-    Input: batch of patches shape [n, patch_h, patch_w, input_ch]
-    Output: image of shape [input_h, input_w, input_ch]
-    '''
-    pad = [[0, 0], [0, 0]]
-    patch_area = patch_h * patch_w
-    height_ratio = input_h // patch_h
-    width_ratio = input_w // patch_w
-
-    image = tf.reshape(patches, [1, height_ratio, width_ratio, patch_area, input_ch])
-    image = tf.split(image, patch_area, 3)
-    image = tf.stack(image, 0)
-    image = tf.reshape(image, [patch_area, height_ratio, width_ratio, input_ch])
-    image = tf.batch_to_space_nd(image, [patch_h, patch_w], pad)
-
-    return image[0]
-
-def make_image(data):
+def encode_image(data):
     converted = tf.image.convert_image_dtype(data, input_dtype)
     encoded = tf.image.encode_png(converted)
 
     return encoded
 
-def make_images(data):
+def encode_images(data):
     data_queue = tf.train.batch([data],
             batch_size=1,
             enqueue_many=True,
             capacity=10000)
 
-    return make_image(data_queue[0])
+    return encode_image(data_queue[0])
+
+def batch(tensors):
+    min_after_dequeue = 10000
+    capacity = min_after_dequeue + 3 * batch_size
+
+    if shuffle:
+        return tf.train.shuffle_batch(tensors,
+            batch_size=batch_size,
+            enqueue_many=True,
+            capacity=capacity,
+            min_after_dequeue=min_after_dequeue)
+    else:
+        return tf.train.batch(tensors,
+            batch_size=batch_size,
+            enqueue_many=True,
+            capacity=capacity,
+            num_threads=1)
 
 def main(args):
     global n_epochs, batch_size, shuffle
 
-    if len(args) < 3 or len(args) > 4:
-        print(usage)
+    # Parse arguments
+    try:
+        mode = args[0].lower()
+
+        if mode in ('train', 'validate'):
+            input_path = args[1]
+            if len(args) > 2:
+                pretrained_path = args[2]
+            else:
+                pretrained_path = None
+        elif mode in ('run'):
+            input_path = args[1]
+            output_dir = args[2]
+            pretrained_path = None
+        else:
+            raise ValueError("Mode must be one of train/validate/run")
+    except:
+        print(usage, file=sys.stderr)
         sys.exit(1)
 
-    mode = args[0].lower()
-    input_list = args[1]
-    output_dir = target_list = args[2]
-    if len(args) == 4:
-        pretrained_path = args[3]
-    else:
-        pretrained_path = None
-
-    if mode not in ('train', 'validate', 'run'):
-        print(usage)
-        sys.exit(1)
-
-    if mode == 'validate':
-        loss = []
-
+    # Global variable adjustments
     if mode in ('validate', 'run'):
         n_epochs = 1
         shuffle = False
 
-    with open(input_list, 'r') as input_set:
-        inputs = input_set.read().splitlines()
-
-    n_examples = len(inputs)
-    patches_per_img = int(1 // image_patch_ratio)
-
     if mode == 'run':
         batch_size = patches_per_img
-    
-    n_patches = n_examples * n_epochs // image_patch_ratio
-    n_batches = n_patches // batch_size
-    if mode == 'train':
-        input_batches = prepare_batches(inputs, noise=input_noise)
+
+    # Data loading
+    if os.path.splitext(input_path)[1] == '.tfrecords':
+        input_images, target_images = read_records([input_path])
+
+        input_patches = generate_patches(input_images, patch_h, patch_w)
+        target_patches = generate_patches(target_images, patch_h, patch_w)
+
+        input_batches, target_batches = batch([input_patches, target_patches])
+
+        n_examples = 0
+        for record in tf.python_io.tf_record_iterator(input_path):
+            n_examples += 1
     else:
-        input_batches = prepare_batches(inputs)
+        with open(input_path) as input_file:
+            input_list = input_file.read().splitlines()
+
+        input_images = read_files(input_list)
+        input_patches = generate_patches(input_images, patch_h, patch_w)
+        input_batches = batch([input_patches])
+
+        target_batches = None
+        
+        n_examples = len(input_list)
 
     if mode in ('train', 'validate'):
-        with open(target_list, 'r') as target_set:
-            targets = target_set.read().splitlines()
+        if target_batches is None:
+            print("No targets specified, use TFRecords for training data.", file=sys.stderr)
+            sys.exit(1)
 
-        target_batches = prepare_batches(targets)
-    else:
-        target_batches = None
+    # Stats
+    n_patches = n_examples * n_epochs * patches_per_img
+    n_batches = n_patches // batch_size
 
+    # Network
     net = VGG16Autoencoder(input_ch, pretrained_path)
     net.build(input_batches, target_batches)
 
+    # Network outputs
     if mode == 'train':
         optimizer = tf.train.AdamOptimizer(learning_rate).minimize(net.loss)
+    elif mode == 'validate':
+        loss = []
     elif mode == 'run':
-        input_data = reconstruct_patches(net.input)
-        output_data = reconstruct_patches(net.output)
-        input_image = make_image(input_data)
-        patch_images = make_images(net.output)
-        output_image = make_image(output_data)
-
-    saver = tf.train.Saver()
+        input_data = reconstruct_image(net.input, input_h, input_w)
+        output_data = reconstruct_image(net.output, input_h, input_w)
+        input_image = encode_image(input_data)
+        patch_images = encode_images(net.output)
+        output_image = encode_image(output_data)
 
     # Initialize session and graph
+    saver = tf.train.Saver()
     with tf.Session() as sess:
+        # Restore model
         if os.path.isfile(model_file + '.index'):
             print("Using model from", model_file)
 
