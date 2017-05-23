@@ -192,18 +192,15 @@ def main(args):
          tf.summary.scalar("loss", net.loss)
 
          if mode == 'validate':
-             tf.summary.image("input", input_data)
-             tf.summary.image("output", output_data)
+             tf.summary.image("input", [input_data])
+             tf.summary.image("output", [output_data])
 
     # Initialize session and graph
     saver = tf.train.Saver()
     with tf.Session() as sess:
         # Setup logging
-        log_path = os.path.join(log_dir, mode)
-        if not os.path.exists(log_path):
-            os.makedirs(log_path)
         summary = tf.summary.merge_all()
-        log_writer = tf.summary.FileWriter(log_path)
+        log_writer = tf.summary.FileWriter(log_dir)
         log_writer.add_graph(sess.graph)
 
         # Restore model
@@ -289,9 +286,6 @@ def main(args):
 
         # Save model
         if mode == 'train':
-            directory = os.path.dirname(model_file)
-            if not os.path.exists(directory):
-                os.makedirs(directory)
             save_path = saver.save(sess, model_file)
             print("Model saved to", save_path)
 
@@ -304,4 +298,15 @@ def main(args):
 
 if __name__ == '__main__':
     argv = sys.argv[1:]
+
+    # Pre-checks
+    checkpoint_dir = os.path.dirname(model_file)
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+
+    for mode in ('train', 'validate', 'run'):
+        path = os.path.join(log_dir, mode)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
     main(argv)

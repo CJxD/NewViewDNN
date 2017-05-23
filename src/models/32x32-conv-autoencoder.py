@@ -26,13 +26,13 @@ image_patch_ratio = patch_h * patch_w / (input_h * input_w)
 patches_per_img = int(1 // image_patch_ratio)
 
 # Training parameters
-model_file = 'checkpoints/model.ckpt'
-log_dir = 'logs'
 learning_rate = 0.001
 n_epochs = 1
 
 summary_interval = 10
 checkpoint_interval = 500
+model_file = 'checkpoints/model.ckpt'
+log_dir = 'logs'
 
 # Network Parameters
 filter_sizes = [3, 3, 3]
@@ -185,18 +185,15 @@ def main(args):
          tf.summary.scalar("loss", net.loss)
 
          if mode == 'validate':
-             tf.summary.image("input", input_data)
-             tf.summary.image("output", output_data)
+             tf.summary.image("input", [input_data])
+             tf.summary.image("output", [output_data])
 
     # Initialize session and graph
     saver = tf.train.Saver()
     with tf.Session() as sess:
         # Setup logging
-        log_path = os.path.join(log_dir, mode)
-        if not os.path.exists(log_path):
-            os.makedirs(log_path)
         summary = tf.summary.merge_all()
-        log_writer = tf.summary.FileWriter(log_path)
+        log_writer = tf.summary.FileWriter(log_dir)
         log_writer.add_graph(sess.graph)
 
         # Restore model
@@ -282,9 +279,6 @@ def main(args):
 
         # Save model
         if mode == 'train':
-            directory = os.path.dirname(model_file)
-            if not os.path.exists(directory):
-                os.makedirs(directory)
             save_path = saver.save(sess, model_file)
             print("Model saved to", save_path)
 
@@ -297,4 +291,15 @@ def main(args):
 
 if __name__ == '__main__':
     argv = sys.argv[1:]
+
+    # Pre-checks
+    checkpoint_dir = os.path.dirname(model_file)
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+
+    for mode in ('train', 'validate', 'run'):
+        path = os.path.join(log_dir, mode)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
     main(argv)
