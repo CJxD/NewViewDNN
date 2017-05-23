@@ -37,7 +37,7 @@ class CNN(ABC):
                 1.0 / math.sqrt(n_input))
 
     def make_bias(self, n):
-        return tf.zeros([n])
+        return tf.truncated_normal([n], stddev=0.001)
 
     def get_kernel(self, name):
         return self.data[name][0]
