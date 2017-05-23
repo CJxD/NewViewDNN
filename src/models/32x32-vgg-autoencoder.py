@@ -200,7 +200,7 @@ def main(args):
     with tf.Session() as sess:
         # Setup logging
         summary = tf.summary.merge_all()
-        log_writer = tf.summary.FileWriter(log_dir)
+        log_writer = tf.summary.FileWriter(os.path.join(log_dir, mode))
         log_writer.add_graph(sess.graph)
 
         # Restore model

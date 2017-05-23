@@ -56,7 +56,7 @@ class ConvAutoencoder(CNN):
 
         if self._t is not None:
             # Euclidean loss
-            self.loss = tf.reduce_sum(tf.square(self._y - self._t))
+            self.loss = self.euclidean_loss(self._y - self._t)
         else:
             self.loss = None
 
