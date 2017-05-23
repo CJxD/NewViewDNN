@@ -3,19 +3,13 @@ import tensorflow as tf
 import numpy as np
 import math
 
+from networks import CNN
 from utils import lrelu
 
-activation_fn = tf.nn.relu
-
-class VGG16Autoencoder(object):
+class VGG16Autoencoder(CNN):
     def __init__(self, image_channels=1, pretrained_path=None):
-        self.data = {}
-
-        self._x = None
-        self._y = None
-        self._z = None
-        self._t = None
-        self.loss = None
+        super().__init__()
+        self.deconv_strides = [1, 2, 2, 1]
 
         if pretrained_path is not None:
             print("Using pretrained weights from", pretrained_path)
@@ -161,72 +155,4 @@ class VGG16Autoencoder(object):
             self.loss = None
 
         return self
-
-    def avg_pool(self, bottom, name):
-        return tf.nn.avg_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
-
-    def max_pool(self, bottom, name):
-        return tf.nn.max_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
-
-    def conv_layer(self, bottom, name):
-        with tf.variable_scope(name):
-            kernel = self.get_kernel(name)
-            bias = self.get_bias(name)
-
-            conv = tf.nn.conv2d(bottom, kernel, strides=[1, 1, 1, 1], padding='SAME')
-            biased = tf.nn.bias_add(conv, bias)
-            activation = activation_fn(biased)
-
-            return activation
-
-    def deconv_layer(self, bottom, top_shape, name):
-        with tf.variable_scope(name):
-            kernel = self.get_kernel(name)
-            bias = self.get_bias(name)
-
-            deconv = tf.nn.conv2d_transpose(bottom, kernel, top_shape, strides=[1, 2, 2, 1], padding='SAME')
-            biased = tf.nn.bias_add(deconv, bias)
-            activation = activation_fn(biased)
-
-            return activation
-
-    def make_kernel(self, size, n_input, n_output):
-        return tf.Variable(
-            tf.random_uniform(
-                size + [n_input, n_output],
-                -1.0 / math.sqrt(n_input),
-                1.0 / math.sqrt(n_input)))
-
-    def make_bias(self, n):
-        return tf.zeros([n])
-
-    def get_kernel(self, name):
-        return self.data[name][0]
-
-    def get_bias(self, name):
-        return self.data[name][1]
-
-    @property
-    def input(self):
-        return self._x
-
-    @input.setter
-    def input(self, x):
-        self.build(x, self._t)
-
-    @property
-    def targets(self):
-        return self._t
-
-    @targets.setter
-    def targets(self, t):
-        self.build(self._x, t)
-
-    @property
-    def output(self):
-        return self._y
-
-    @property
-    def latent_state(self):
-        return self._z
 

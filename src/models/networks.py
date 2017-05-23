@@ -1,0 +1,99 @@
+from __future__ import division, print_function
+from abc import ABC, abstractmethod
+
+import tensorflow as tf
+import math
+
+class CNN(ABC):
+    def __init__(self):
+        self.data = {}
+
+        self.conv_strides = [1, 1, 1, 1]
+        self.conv_padding = 'SAME'
+
+        self.deconv_strides = [1, 1, 1, 1]
+        self.deconv_padding = 'SAME'
+
+        self.pool_kernel = [1, 2, 2, 1]
+        self.pool_strides = [1, 2, 2, 1]
+        self.pool_padding = 'SAME'
+
+        self.activation = tf.nn.relu
+
+        self._x = None
+        self._y = None
+        self._z = None
+        self._t = None
+        self.loss = None
+
+    @abstractmethod
+    def build(self, images, targets=None):
+        pass
+
+    def make_kernel(self, size, n_input, n_output):
+        return tf.random_uniform(
+                size + [n_input, n_output],
+                -1.0 / math.sqrt(n_input),
+                1.0 / math.sqrt(n_input))
+
+    def make_bias(self, n):
+        return tf.zeros([n])
+
+    def get_kernel(self, name):
+        return self.data[name][0]
+
+    def get_bias(self, name):
+        return self.data[name][1]
+
+    def avg_pool(self, bottom, name):
+        with tf.variable_scope(name):
+            return tf.nn.avg_pool(bottom, ksize=self.pool_kernel, strides=self.pool_strides, padding=self.pool_padding)
+
+    def max_pool(self, bottom, name):
+        with tf.variable_scope(name):
+            return tf.nn.max_pool(bottom, ksize=self.pool_kernel, strides=self.pool_strides, padding=self.pool_padding)
+
+    def conv_layer(self, bottom, name):
+        with tf.variable_scope(name):
+            kernel = tf.Variable(self.get_kernel(name), name='W')
+            bias = tf.Variable(self.get_bias(name), name='b')
+
+            conv = tf.nn.conv2d(bottom, kernel, strides=self.conv_strides, padding=self.conv_padding)
+            output = self.activation(conv + bias)
+
+            return output
+
+    def deconv_layer(self, bottom, top_shape, name):
+        with tf.variable_scope(name):
+            kernel = tf.Variable(self.get_kernel(name), name='W')
+            bias = tf.Variable(self.get_bias(name), name='b')
+
+            deconv = tf.nn.conv2d_transpose(bottom, kernel, top_shape, strides=self.deconv_strides, padding=self.deconv_padding)
+            output = self.activation(deconv + bias)
+
+            return output
+
+    @property
+    def input(self):
+        return self._x
+
+    @input.setter
+    def input(self, x):
+        self.build(x, self._t)
+
+    @property
+    def target(self):
+        return self._t
+
+    @target.setter
+    def target(self, t):
+        self.build(self._x, t)
+
+    @property
+    def output(self):
+        return self._y
+
+    @property
+    def latent_state(self):
+        return self._z
+
