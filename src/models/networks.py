@@ -45,15 +45,15 @@ class CNN(ABC):
     def get_bias(self, name):
         return self.data[name][1]
 
-    def avg_pool(self, bottom, name):
+    def avg_pool(self, bottom, name='pool'):
         with tf.variable_scope(name):
             return tf.nn.avg_pool(bottom, ksize=self.pool_kernel, strides=self.pool_strides, padding=self.pool_padding)
 
-    def max_pool(self, bottom, name):
+    def max_pool(self, bottom, name='pool'):
         with tf.variable_scope(name):
             return tf.nn.max_pool(bottom, ksize=self.pool_kernel, strides=self.pool_strides, padding=self.pool_padding)
 
-    def conv_layer(self, bottom, name):
+    def conv_layer(self, bottom, name='conv'):
         with tf.variable_scope(name):
             kernel = tf.Variable(self.get_kernel(name), name='W')
             bias = tf.Variable(self.get_bias(name), name='b')
@@ -67,7 +67,7 @@ class CNN(ABC):
 
             return output
 
-    def deconv_layer(self, bottom, top_shape, name):
+    def deconv_layer(self, bottom, top_shape, name='deconv'):
         with tf.variable_scope(name):
             kernel = tf.Variable(self.get_kernel(name), name='W')
             bias = tf.Variable(self.get_bias(name), name='b')
@@ -80,6 +80,14 @@ class CNN(ABC):
             tf.summary.histogram("activations", output)
 
             return output
+    
+    def euclidean_loss(self, tensor, name='loss'):
+        with tf.variable_scope(name):
+            return tf.reduce_sum(tf.square(tensor))
+
+    def euclidean_mean(self, tensor):
+        with tf.variable_scope(name):
+            return tf.reduce_mean(tf.square(tensor))
 
     @property
     def input(self):

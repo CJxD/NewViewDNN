@@ -68,15 +68,17 @@ def read_records(record_list):
     return input_image, target_image
 
 def decode_image(encoded):
-    image = tf.image.decode_png(encoded, channels=input_ch, dtype=input_dtype)
-    image = tf.image.convert_image_dtype(image, dtype)
-    image = tf.image.resize_images(image, [input_h, input_w])
+    with tf.variable_scope('decode_image'):
+        image = tf.image.decode_png(encoded, channels=input_ch, dtype=input_dtype)
+        image = tf.image.convert_image_dtype(image, dtype)
+        image = tf.image.resize_images(image, [input_h, input_w])
 
     return image
 
 def encode_image(data):
-    converted = tf.image.convert_image_dtype(data, input_dtype)
-    encoded = tf.image.encode_png(converted)
+    with tf.variable_scope('encode_image'):
+        converted = tf.image.convert_image_dtype(data, input_dtype)
+        encoded = tf.image.encode_png(converted)
 
     return encoded
 
