@@ -61,6 +61,10 @@ class CNN(ABC):
             conv = tf.nn.conv2d(bottom, kernel, strides=self.conv_strides, padding=self.conv_padding)
             output = self.activation(conv + bias)
 
+            tf.summary.histogram("weights", kernel)
+            tf.summary.histogram("biases", bias)
+            tf.summary.histogram("activations", output)
+
             return output
 
     def deconv_layer(self, bottom, top_shape, name):
@@ -70,6 +74,10 @@ class CNN(ABC):
 
             deconv = tf.nn.conv2d_transpose(bottom, kernel, top_shape, strides=self.deconv_strides, padding=self.deconv_padding)
             output = self.activation(deconv + bias)
+
+            tf.summary.histogram("weights", kernel)
+            tf.summary.histogram("biases", bias)
+            tf.summary.histogram("activations", output)
 
             return output
 
