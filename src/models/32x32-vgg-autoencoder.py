@@ -7,9 +7,11 @@ import sys, os, os.path
 from vgg_autoencoder import VGG16Autoencoder
 from utils import *
 
-usage = "Usage: 32x32-vgg-autoencoder.py train/validate <path to examples> [path to pretrained model]\n"
+script_name = os.path.basename(__file__)
+
+usage = "Usage: %s train/validate <path to examples> [path to pretrained model]\n" % script_name
 usage +="       or\n"
-usage +="       32x32-vgg-autoencoder.py run <path to inputs> <path to outputs>"
+usage +="       %s run <path to inputs> <path to outputs>" % script_name
 
 # Data parameters
 batch_size = 256
@@ -24,9 +26,13 @@ image_patch_ratio = patch_h * patch_w / (input_h * input_w)
 patches_per_img = int(1 // image_patch_ratio)
 
 # Training parameters
-model_file = 'checkpoints/model.ckpt'
 learning_rate = 0.001
 n_epochs = 1
+
+summary_interval = 10
+checkpoint_interval = 500
+model_file = 'checkpoints/model.ckpt'
+log_dir = 'logs'
 
 # Network Parameters
 filter_sizes = [3, 3, 3]
@@ -170,18 +176,36 @@ def main(args):
     # Network outputs
     if mode == 'train':
         optimizer = tf.train.AdamOptimizer(learning_rate).minimize(net.loss)
-    elif mode == 'validate':
-        loss = []
-    elif mode == 'run':
+    
+    if mode == 'validate':
+        losses = []
+    
+    if mode in ('validate', 'run'):
         input_data = reconstruct_image(net.input, input_h, input_w)
         output_data = reconstruct_image(net.output, input_h, input_w)
         input_image = encode_image(input_data)
         patch_images = encode_images(net.output)
         output_image = encode_image(output_data)
 
+    if summary_interval > 0:
+         # Summaries
+         tf.summary.scalar("loss", net.loss)
+
+         if mode == 'validate':
+             tf.summary.image("input", input_data)
+             tf.summary.image("output", output_data)
+
     # Initialize session and graph
     saver = tf.train.Saver()
     with tf.Session() as sess:
+        # Setup logging
+        log_path = os.path.join(log_dir, mode)
+        if not os.path.exists(log_path):
+            os.makedirs(log_path)
+        summary = tf.summary.merge_all()
+        log_writer = tf.summary.FileWriter(log_path)
+        log_writer.add_graph(sess.graph)
+
         # Restore model
         if os.path.isfile(model_file + '.index'):
             print("Using model from", model_file)
@@ -190,15 +214,19 @@ def main(args):
                 saver.restore(sess, model_file)
             except tf.errors.OpError:
                 # Incompatible model
-                print("Could not load model - initialising new session")
-                sess.run(tf.global_variables_initializer())
+                if mode == 'train':
+                    print("Could not load model - initialising new session")
+                    sess.run(tf.global_variables_initializer())
+                else:
+                    print("No trained model found in %s" % model_file, file=sys.stderr)
+                    sys.exit(1)
         else:
-            if mode in ('validate', 'run'):
-                print("No trained model found in %s" % model_file, file=sys.stderr)
-                sys.exit(1)
-            else:
+            if mode == 'train':
                 print("Initialising session")
                 sess.run(tf.global_variables_initializer())
+            else:
+                print("No trained model found in %s" % model_file, file=sys.stderr)
+                sys.exit(1)
             
         sess.run(tf.local_variables_initializer())
 
@@ -208,38 +236,47 @@ def main(args):
 
         # Main loop
         try:
-            i = 0
+            step = 0
             start_time = time.time()
             while not coord.should_stop():
                 batch_time = time.time()
 
+                # Write summary
+                if summary_interval > 0 and step % summary_interval == 0:
+                    s = sess.run(summary)
+                    log_writer.add_summary(s, step)
+
                 # Train
                 if mode == 'train':
-                    print("Training batch %d/%d" % (i, n_batches))
+                    print("Training batch %d/%d" % (step, n_batches))
                     _, loss = sess.run([optimizer, net.loss])
                     patch_loss = loss // batch_size
                     print("Loss per patch: %d (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
 
                 # Validate
                 elif mode == 'validate':
-                    print("Validating batch %d/%d" % (i, n_batches))
-                    loss.append(sess.run([net.loss]))
+                    print("Validating batch %d/%d" % (step, n_batches))
+                    losses.append(sess.run(net.loss))
 
                 # Generate outputs
                 elif mode == 'run':
-                    print("Processing image %d/%d" % (i, n_batches))
-                    tag = str(i)
+                    print("Processing image %d/%d" % (step, n_batches))
+                    tag = str(step)
                     fname_in = tf.constant(os.path.join(output_dir, tag + '_in.png'))
                     fname_out = tf.constant(os.path.join(output_dir, tag + '_out.png'))
                     fwrite_in = tf.write_file(fname_in, input_image)
                     fwrite_out = tf.write_file(fname_out, output_image)
                     sess.run([fwrite_in, fwrite_out])
 
+                # Write checkpoint
+                if step % checkpoint_interval == 0:
+                    saver.save(sess, model_file, step)
+
                 batch_duration = time.time() - batch_time
                 elapsed = time.time() - start_time
                 print("Took %.3fs, %s elapsed so far" % (batch_duration, time_taken(elapsed)))
 
-                i += 1
+                step += 1
 
         except tf.errors.OutOfRangeError:
             elapsed = time.time() - start_time
@@ -263,7 +300,7 @@ def main(args):
             print("Final image loss:", loss / image_patch_ratio // batch_size)
         
         elif mode == 'validate':
-            print("Average image loss:", np.mean(loss) / image_patch_ratio // batch_size)
+            print("Average image loss:", np.mean(losses) / image_patch_ratio // batch_size)
 
 if __name__ == '__main__':
     argv = sys.argv[1:]

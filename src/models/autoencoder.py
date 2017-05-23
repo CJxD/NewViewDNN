@@ -1,47 +1,36 @@
 from __future__ import division, print_function
 import tensorflow as tf
-import math
 
+from networks import CNN
 from utils import lrelu
 
-activation_fn = lrelu
-
-class ConvAutoencoder(object):
+class ConvAutoencoder(CNN):
     def __init__(self, filter_sizes=[3, 3, 3], n_filters=[10, 10, 10], image_channels=1):
+        super().__init__()
+        self.activation = lrelu
+        self.conv_strides = self.deconv_strides = [1, 2, 2, 1]
+
         self.n_filters = [image_channels] + n_filters
         self.filter_sizes = filter_sizes
-
-        self.weights = {}
-        self.biases = {}
-
-        self._x = None
-        self._y = None
-        self._z = None
-        self._t = None
-        self.loss = None
 
         # Initialise weights
         for i, n_output in enumerate(self.n_filters[1:]):
             n_input = self.n_filters[i]
+            kernel_size = [self.filter_sizes[i], self.filter_sizes[i]]
             
-            # Initialise kernel weights
             id = str(i+1)
-            self.weights['conv' + id] = tf.Variable(
-                tf.random_uniform([
-                    self.filter_sizes[i],
-                    self.filter_sizes[i],
-                    n_input, n_output],
-                    -1.0 / math.sqrt(n_input),
-                    1.0 / math.sqrt(n_input)))
+            # Convolution weights
+            self.data['conv' + id] = [
+                self.make_kernel(kernel_size, n_input, n_output),
+                self.make_bias(n_output)
+            ]
 
-            # Initialise convolution biases
-            self.biases['conv' + id] = tf.Variable(tf.zeros([n_output]))
-
-            # Initialise deconvolution kernels to same weights as paired convolution
-            self.weights['deconv' + id] = self.weights['conv' + id]
-
-            # Initialise deconvolution biases
-            self.biases['deconv' + id] = tf.Variable(tf.zeros([n_input]))
+            # Deconvolution weights
+            name = 'deconv' + id
+            self.data['deconv' + id] = [
+                self.make_kernel(kernel_size, n_input, n_output),
+                self.make_bias(n_input)
+            ]
 
     def build(self, images, targets=None):
         self._x = images
@@ -72,62 +61,4 @@ class ConvAutoencoder(object):
             self.loss = None
 
         return self
-
-    def avg_pool(self, bottom, name):
-        return tf.nn.avg_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
-
-    def max_pool(self, bottom, name):
-        return tf.nn.max_pool(bottom, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME', name=name)
-
-    def conv_layer(self, bottom, name):
-        with tf.variable_scope(name):
-            kernel = self.get_kernel(name)
-            bias = self.get_bias(name)
-
-            conv = tf.nn.conv2d(bottom, kernel, strides=[1, 2, 2, 1], padding='SAME')
-            biased = tf.nn.bias_add(conv, bias)
-            activation = activation_fn(biased)
-
-            return activation
-
-    def deconv_layer(self, bottom, top_shape, name):
-        with tf.variable_scope(name):
-            kernel = self.get_kernel(name)
-            bias = self.get_bias(name)
-
-            deconv = tf.nn.conv2d_transpose(bottom, kernel, top_shape, strides=[1, 2, 2, 1], padding='SAME')
-            biased = tf.nn.bias_add(deconv, bias)
-            activation = activation_fn(biased)
-
-            return activation
-
-    def get_kernel(self, name):
-        return self.weights[name]
-
-    def get_bias(self, name):
-        return self.biases[name]
-
-    @property
-    def input(self):
-        return self._x
-
-    @input.setter
-    def input(self, x):
-        self.build(x, self._t)
-
-    @property
-    def target(self):
-        return self._t
-
-    @target.setter
-    def target(self, t):
-        self.build(self._x, t)
-
-    @property
-    def output(self):
-        return self._y
-
-    @property
-    def latent_state(self):
-        return self._z
 
