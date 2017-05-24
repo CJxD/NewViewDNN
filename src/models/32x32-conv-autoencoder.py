@@ -166,7 +166,8 @@ def main(args):
 
     # Network
     net = ConvAutoencoder(filter_sizes, n_filters, input_ch)
-    net.build(input_batches, target_batches)
+    target_diffs = target_batches - input_batches
+    net.build(input_batches, target_diffs)
 
     # Network outputs
     if mode == 'train':
@@ -176,8 +177,9 @@ def main(args):
         losses = []
     
     if mode in ('validate', 'run'):
+        output = net.input + net.output
         input_data = reconstruct_image(net.input, input_h, input_w)
-        output_data = reconstruct_image(net.output, input_h, input_w)
+        output_data = reconstruct_image(output, input_h, input_w)
         input_image = encode_image(input_data)
         patch_images = encode_images(net.output)
         output_image = encode_image(output_data)
