@@ -1,4 +1,5 @@
-from __future__ import division, print_function
+#!/usr/bin/env python3
+
 import tensorflow as tf
 import numpy as np
 import time
@@ -13,9 +14,6 @@ shuffle = False
 input_dtype=tf.uint8
 dtype=tf.float32
 
-filter_sizes = [3, 3, 3]
-num_filters = [n * input_ch for n in [10, 10, 10]]
-
 learning_rate = 0.001
 num_epochs = 1
 
@@ -23,7 +21,10 @@ input_h = input_w = 1024
 input_ch = 3
 patch_h = patch_w = 32
 image_patch_ratio = lambda: patch_h * patch_w / (input_h * input_w)
-patches_per_img = lambda: int(1 // image_patch_ratio)
+patches_per_img = lambda: int(1 // image_patch_ratio())
+
+filter_sizes = [3, 3, 3]
+num_filters = [n * input_ch for n in [10, 10, 10]]
 
 summary_interval = 10
 checkpoint_interval = 500
@@ -31,7 +32,7 @@ model_file = 'checkpoints/model.ckpt'
 log_dir = 'logs'
 
 def read_files(image_list):
-    filename_queue = tf.train.string_input_producer(image_list, num_epochs=n_epochs)
+    filename_queue = tf.train.string_input_producer(image_list, num_epochs=num_epochs)
 
     reader = tf.WholeFileReader()
     _, image_file = reader.read(filename_queue)
@@ -39,7 +40,7 @@ def read_files(image_list):
     return decode_image(image_file)
 
 def read_records(record_list):
-    filename_queue = tf.train.string_input_producer(record_list, num_epochs=n_epochs)
+    filename_queue = tf.train.string_input_producer(record_list, num_epochs=num_epochs)
 
     reader = tf.TFRecordReader()
     _, example = reader.read(filename_queue)
@@ -100,15 +101,19 @@ def batch(tensors):
             num_threads=1)
 
 def main(args):
-    global n_epochs, batch_size, shuffle
+    global num_epochs, batch_size, shuffle
 
-    # Global variable adjustments
+    '''
+    Global variable adjustments
+    '''
     if args.mode in ('validate', 'run'):
         num_epochs = 1
         shuffle = False
         batch_size = patches_per_img()
 
-    # Data loading
+    '''
+    Data loading
+    '''
     if os.path.splitext(args.input_file)[1] == '.tfrecords':
         input_images, target_images = read_records([args.input_file])
 
@@ -137,11 +142,15 @@ def main(args):
             print("No targets specified, use TFRecords for training data.", file=sys.stderr)
             sys.exit(1)
 
-    # Stats
+    '''
+    Stats
+    '''
     num_patches = num_examples * num_epochs * patches_per_img()
     num_batches = num_patches // batch_size
 
-    # Network
+    '''
+    Network
+    '''
     if args.model == 'basic':
         from autoencoder import ConvAutoencoder
         net = ConvAutoencoder(args.filter_sizes, args.num_filters, input_ch)
@@ -149,7 +158,7 @@ def main(args):
     elif args.model == 'vgg16':
         from vgg_autoencoder import VGG16Autoencoder
         if args.pretrain_weights:
-            net = VGG16Autoencoder(input_ch, pretrain_weights)
+            net = VGG16Autoencoder(input_ch, args.pretrain_weights)
         else:
             net = VGG16Autoencoder(input_ch)
     
@@ -160,7 +169,9 @@ def main(args):
     target_diffs = target_batches - input_batches
     net.build(input_batches, target_diffs)
 
-    # Network outputs
+    '''
+    Network outputs
+    '''
     if args.mode == 'train':
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(net.loss)
     
@@ -179,19 +190,25 @@ def main(args):
          # Summaries
          tf.summary.scalar("loss", net.loss)
 
-         if mode == 'validate':
+         if args.mode == 'validate':
              tf.summary.image("input", [input_data])
              tf.summary.image("output", [output_data])
 
-    # Initialize session and graph
+    '''
+    Initialize session and graph
+    '''
     saver = tf.train.Saver()
     with tf.Session() as sess:
-        # Setup logging
+        '''
+        Setup logging
+        '''
         summary = tf.summary.merge_all()
         log_writer = tf.summary.FileWriter(os.path.join(args.log_dir, args.mode))
         log_writer.add_graph(sess.graph)
 
-        # Restore model
+        '''
+        Restore model
+        '''
         if os.path.isfile(args.model_file + '.index'):
             print("Using model from", args.model_file)
 
@@ -215,11 +232,15 @@ def main(args):
             
         sess.run(tf.local_variables_initializer())
 
-        # Start input enqueue threads
+        '''
+        Start input enqueue threads
+        '''
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
-        # Main loop
+        '''
+        Main loop
+        '''
         try:
             step = 0
             start_time = time.time()
@@ -272,68 +293,74 @@ def main(args):
         # Wait for threads to finish.
         coord.join(threads)
 
-        # Save model
+        '''
+        Save model
+        '''
         if args.mode == 'train':
             save_path = saver.save(sess, args.model_file)
             print("Model saved to", save_path)
 
-        # Results
+        '''
+        Results
+        '''
         if args.mode == 'train':
             print("Final image loss:", loss / image_patch_ratio() // batch_size)
         
         elif args.mode == 'validate':
             print("Average image loss:", np.mean(losses) / image_patch_ratio() // batch_size)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convolutional Autoencoder Runner')
     parser.add_argument('mode', help="train, validate, or run")
     
+    parser.add_argument('-i', '--input-file', required=True, help="Input TFRecords file or list of input images (run mode only) [required]")
+    parser.add_argument('-o', '--output-dir', help="Directory to store output images [required in run mode]")
+
     parser.add_argument('-b', '--batch-size', default=batch_size, type=int, help="Number of examples per batch (default: %d)" % batch_size)
     parser.add_argument('-s', '--shuffle', action='store_true', help="Shuffles input batches before training")
     parser.add_argument('-m', '--model', default='basic', help="basic (default) or vgg16")
     parser.add_argument('-w', '--pretrain-weights', help="Pretrained weights for the model, if applicable")
-    parser.add_argument('-i', '--input-file', required=True, help="Input TFRecords file or list of input images (run mode only) [required]")
-    parser.add_argument('-o', '--output-dir', help="Directory to store output images [required in run mode]")
     
     parser.add_argument('--filter-sizes', nargs='+', default=filter_sizes, type=int, help="List of kernel filter sizes to use for each convolutional layer (basic model only)")
-    parser.add_argument('--num-filters', nargs='+', default=n_filters, type=int, help="Output depth for each convolutional layer (basic model only)")
+    parser.add_argument('--num-filters', nargs='+', default=num_filters, type=int, help="Output depth for each convolutional layer (basic model only)")
  
     parser.add_argument('-l', '--learning-rate', default=learning_rate, type=float, help="Initial learning rate (default: %f)" % learning_rate)
     parser.add_argument('-n', '--num-epochs', default=num_epochs, type=int, help="Number of training repetitions to do (default: %d)" % num_epochs)
     
-    parser.add_argument('-H', '--image-height', default=input_h, type=int, help="Resize input images to this height (default: %d)" % input_h)
-    parser.add_argument('-W', '--image-width', default=input_w, type=int, help="Resize input images to this width (default: %d)" % input_w)
+    parser.add_argument('-X', '--image-width', default=input_w, type=int, help="Resize input images to this width (default: %d)" % input_w)
+    parser.add_argument('-Y', '--image-height', default=input_h, type=int, help="Resize input images to this height (default: %d)" % input_h)
     parser.add_argument('-C', '--image-channels', default=input_ch, type=int, help="Use grayscale (1), RGB (3), or RGBA (4) (default: %d)" % input_ch)
 
-    parser.add_argument('-h', '--patch-height', default=patch_h, type=int, help="Height of patches to split input images into (default: %d)" % patch_h)
-    parser.add_argument('-w', '--patch-width', default=patch_w, type=int, help="Width of patches to split input images into (default: %d)" % patch_w)
+    parser.add_argument('-x', '--patch-width', default=patch_w, type=int, help="Width of patches to split input images into (default: %d)" % patch_w)
+    parser.add_argument('-y', '--patch-height', default=patch_h, type=int, help="Height of patches to split input images into (default: %d)" % patch_h)
 
     parser.add_argument('--summary-interval', default=summary_interval, type=int, help="Number of batches before each summary checkpoint (default: %d)" % summary_interval)
     parser.add_argument('--checkpoint-interval', default=checkpoint_interval, type=int, help="Number of batches before each model checkpoint (default: %d)" % checkpoint_interval)
     parser.add_argument('--log-dir', default=log_dir, help="Directory to save summaries to (default: %s)" % log_dir)
     parser.add_argument('--model-file', default=model_file, help="File to save model to (default: %s)" % model_file)
     
-    # Globals
-    batch_size = args.b
-    shuffle = args.s
-    input_h = args.H
-    input_w = args.W
-    input_ch = args.C
-    patch_h = args.h
-    patch_w = args.w
-    
     args = parser.parse_args()
+
+    # Globals
+    batch_size = args.batch_size
+    shuffle = args.shuffle
+    input_h = args.image_height
+    input_w = args.image_width
+    input_ch = args.image_channels
+    patch_h = args.patch_height
+    patch_w = args.patch_width
     
     # Pre-checks
     if args.mode not in ('train', 'validate', 'run'):
-        print("Mode must be one of train/validate/run.", file=sys.stdout)
         parser.print_help()
+        print("Mode must be one of train/validate/run.", file=sys.stdout)
         sys.exit(2)
         
     if args.mode == 'run':
         if not args.output_dir:
-            print("Must specify output dir when in run mode.", file=sys.stdout)
             parser.print_help()
+            print("Must specify output dir when in run mode.", file=sys.stdout)
             sys.exit(2)
 
     checkpoint_dir = os.path.dirname(args.model_file)
