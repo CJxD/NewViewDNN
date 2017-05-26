@@ -261,22 +261,24 @@ def main(args):
             while not coord.should_stop():
                 batch_time = time.time()
 
-                # Write summary
+                # Prepare summary if required
                 if args.summary_interval > 0 and step % args.summary_interval == 0:
-                    s = sess.run(summary)
-                    log_writer.add_summary(s, step)
+                    summary_runner = summary
+                else:
+                    summary_runner = tf.constant(0)
 
                 # Train
                 if args.mode == 'train':
                     print("Training batch %d/%d" % (step, num_batches))
-                    _, loss = sess.run([optimizer, net.loss])
+                    _, loss, s = sess.run([optimizer, net.loss, summary])
                     patch_loss = loss // batch_size
                     print("Loss per patch: %d (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
 
                 # Validate
                 elif args.mode == 'validate':
                     print("Validating batch %d/%d" % (step, num_batches))
-                    losses.append(sess.run(net.loss))
+                    loss, s = sess.run([net.loss, summary])
+                    losses.append(loss)
 
                 # Generate outputs
                 elif args.mode == 'run':
@@ -286,7 +288,11 @@ def main(args):
                     fname_out = tf.constant(os.path.join(args.output_dir, tag + '_out.png'))
                     fwrite_in = tf.write_file(fname_in, input_image)
                     fwrite_out = tf.write_file(fname_out, output_image)
-                    sess.run([fwrite_in, fwrite_out])
+                    _, _, s = sess.run([fwrite_in, fwrite_out, summary])
+
+                # Write summary
+                if s:
+                    log_writer.add_summary(s, step)
 
                 # Write checkpoint
                 if step % args.checkpoint_interval == 0:
