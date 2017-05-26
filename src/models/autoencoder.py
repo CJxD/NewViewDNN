@@ -7,7 +7,7 @@ from utils import lrelu
 class ConvAutoencoder(CNN):
     def __init__(self, filter_sizes=[3, 3, 3], n_filters=[10, 10, 10], image_channels=1):
         super().__init__()
-        self.activation = lrelu
+        self.activation = tf.nn.relu
         self.conv_strides = self.deconv_strides = [1, 2, 2, 1]
 
         self.n_filters = [image_channels] + n_filters

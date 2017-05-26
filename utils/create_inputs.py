@@ -5,7 +5,13 @@ import sys
 import re
 from os.path import *
 from glob import glob
+
 base_path = dirname(dirname(realpath(__file__)))
+corpus_path = join(base_path, "data", ".shapenet")
+output_path = join(base_path, "data")
+train_file = join(output_path, "train.tfrecords")
+val_file = join(output_path, "val.tfrecords")
+test_file = join(output_path, "test.tfrecords")
 
 usage = "Usage: create_inputs.py [collection id, ...]"
 
@@ -30,10 +36,10 @@ def main(args):
 
 	proj_pat = re.compile(r'.*/proj_(.+)\.png')
 	
-	with open(join(base_path, "data", ".shapenet", "splits.csv"), 'r') as splits, \
-		tf.python_io.TFRecordWriter(join(base_path, "data", "train.tfrecords")) as train, \
-		tf.python_io.TFRecordWriter(join(base_path, "data", "val.tfrecords")) as val, \
-		tf.python_io.TFRecordWriter(join(base_path, "data", "test.tfrecords")) as test:
+	with open(join(corpus_path, "splits.csv"), 'r') as splits, \
+		tf.python_io.TFRecordWriter(train_file) as train, \
+		tf.python_io.TFRecordWriter(val_file) as val, \
+		tf.python_io.TFRecordWriter(test_file) as test:
 		header = None
 		for line in splits:
 			if not header:
@@ -49,9 +55,7 @@ def main(args):
 			synset_id = '0' + str(synset_num)
 			id = entry[3]
 			split = entry[4]
-			dir = join(base_path, "data", ".shapenet", synset_id, id, "renders")
-
-			print("Processing %s/%s" % (synset_id, id))
+			dir = join(corpus_path, synset_id, id, "renders")
 
 			if split == "train":
 				records = train
@@ -84,6 +88,7 @@ def main(args):
 							'target_image': _bytes_feature(tf.compat.as_bytes(target_image))}))
     
 					records.write(example.SerializeToString())
+                                        print("Found %s" % join((synset_id, id))
 				except:
 					pass
 
