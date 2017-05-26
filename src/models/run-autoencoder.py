@@ -9,7 +9,7 @@ import argparse
 from utils import *
 
 # Defaults
-batch_size = 256
+batch_size = 1024
 shuffle = False
 input_dtype=tf.uint8
 dtype=tf.float32
@@ -83,7 +83,7 @@ def encode_images(data):
 
     return encode_image(data_queue[0])
 
-def batch(tensors):
+def batch(tensors, batch_size=batch_size):
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
 
@@ -166,8 +166,10 @@ def main(args):
         print("Invalid model: %s.", file=sys.stderr)
         sys.exit(1)
         
-    target_diffs = target_batches - input_batches
-    net.build(input_batches, target_diffs)
+    if args.differential:
+        target_batches = target_batches - input_batches
+
+    net.build(input_batches, target_batches)
 
     '''
     Network outputs
@@ -177,22 +179,34 @@ def main(args):
     
     if args.mode == 'validate':
         losses = []
-    
-    if args.mode in ('validate', 'run'):
+
+    if args.differential:
+        input = net.input
+        target = net.input + net.target
         output = net.input + net.output
-        input_data = reconstruct_image(net.input, input_h, input_w)
-        output_data = reconstruct_image(output, input_h, input_w)
-        input_image = encode_image(input_data)
-        patch_images = encode_images(net.output)
-        output_image = encode_image(output_data)
+    else:
+        input = net.input
+        target = net.target
+        output = net.output
+
+    if args.mode == 'train':
+        input, target, output = batch([net.input, target, output], patches_per_img())
+
+    input_data = reconstruct_image(input, input_h, input_w)
+    target_data = reconstruct_image(target, input_h, input_w)
+    output_data = reconstruct_image(output, input_h, input_w)
+    input_image = encode_image(input_data)
+    target_image = encode_image(target_data)
+    output_image = encode_image(output_data)
+    patch_images = encode_images(net.output)
 
     if args.summary_interval > 0:
          # Summaries
          tf.summary.scalar("loss", net.loss)
 
-         if args.mode == 'validate':
-             tf.summary.image("input", [input_data])
-             tf.summary.image("output", [output_data])
+         tf.summary.image("input", [input_data])
+         tf.summary.image("target", [target_data])
+         tf.summary.image("output", [output_data])
 
     '''
     Initialize session and graph
@@ -321,6 +335,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--shuffle', action='store_true', help="Shuffles input batches before training")
     parser.add_argument('-m', '--model', default='basic', help="basic (default) or vgg16")
     parser.add_argument('-w', '--pretrain-weights', help="Pretrained weights for the model, if applicable")
+    parser.add_argument('-d', '--differential', action='store_true', help="Train for the differences between input and output images rather than the output image itself.")
     
     parser.add_argument('--filter-sizes', nargs='+', default=filter_sizes, type=int, help="List of kernel filter sizes to use for each convolutional layer (basic model only)")
     parser.add_argument('--num-filters', nargs='+', default=num_filters, type=int, help="Output depth for each convolutional layer (basic model only)")
