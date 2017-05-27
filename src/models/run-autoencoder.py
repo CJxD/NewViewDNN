@@ -10,7 +10,7 @@ import argparse
 from utils import *
 
 # Defaults
-batch_size = 1024
+batch_size = -1
 shuffle = False
 input_dtype=tf.uint8
 dtype=tf.float32
@@ -102,16 +102,6 @@ def batch(tensors, batch_size=batch_size):
             num_threads=1)
 
 def main(args):
-    global num_epochs, batch_size, shuffle
-
-    '''
-    Global variable adjustments
-    '''
-    if args.mode in ('validate', 'run'):
-        num_epochs = 1
-        shuffle = False
-        batch_size = patches_per_img()
-
     '''
     Data loading
     '''
@@ -346,7 +336,7 @@ if __name__ == '__main__':
     parser.add_argument('-i', '--input-file', required=True, help="Input TFRecords file or list of input images (run mode only) [required]")
     parser.add_argument('-o', '--output-dir', help="Directory to store output images [required in run mode]")
 
-    parser.add_argument('-b', '--batch-size', default=batch_size, type=int, help="Number of examples per batch (default: %d)" % batch_size)
+    parser.add_argument('-b', '--batch-size', default=batch_size, type=int, help="Number of examples per batch (default: num patches per image)")
     parser.add_argument('-s', '--shuffle', action='store_true', help="Shuffles input batches before training")
     parser.add_argument('-m', '--model', default='basic', help="basic (default) or vgg16")
     parser.add_argument('-w', '--pretrain-weights', help="Pretrained weights for the model, if applicable")
@@ -382,6 +372,9 @@ if __name__ == '__main__':
     patch_w = args.patch_width
     
     # Pre-checks
+    if batch_size < 0:
+        batch_size = patches_per_img()
+
     if args.mode not in ('train', 'validate', 'run'):
         parser.print_help()
         print("Mode must be one of train/validate/run.", file=sys.stdout)
@@ -392,6 +385,11 @@ if __name__ == '__main__':
             parser.print_help()
             print("Must specify output dir when in run mode.", file=sys.stdout)
             sys.exit(2)
+    
+    if args.mode in ('validate', 'run'):
+        num_epochs = 1
+        shuffle = False
+        batch_size = patches_per_img()
 
     checkpoint_dir = os.path.dirname(args.model_file)
     if not os.path.exists(checkpoint_dir):
