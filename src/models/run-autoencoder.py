@@ -111,7 +111,7 @@ def main(args):
         input_patches = generate_patches(input_images, patch_h, patch_w)
         target_patches = generate_patches(target_images, patch_h, patch_w)
 
-        input_batches, target_batches = batch([input_patches, target_patches])
+        input_batches, target_batches = batch([input_patches, target_patches], batch_size)
 
         num_examples = 0
         for record in tf.python_io.tf_record_iterator(args.input_file):
@@ -122,7 +122,7 @@ def main(args):
 
         input_images = read_files(input_list)
         input_patches = generate_patches(input_images, patch_h, patch_w)
-        input_batches = batch([input_patches])
+        input_batches = batch([input_patches], batch_size)
 
         target_batches = None
         
@@ -373,7 +373,7 @@ if __name__ == '__main__':
     
     # Pre-checks
     if batch_size < 0:
-        batch_size = patches_per_img()
+        args.batch_size = batch_size = patches_per_img()
 
     if args.mode not in ('train', 'validate', 'run'):
         parser.print_help()
