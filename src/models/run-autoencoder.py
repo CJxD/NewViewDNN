@@ -2,6 +2,7 @@
 
 import tensorflow as tf
 import numpy as np
+import collections
 import time
 import sys, os, os.path
 import argparse
@@ -258,6 +259,7 @@ def main(args):
         try:
             step = 0
             start_time = time.time()
+            remaining = collections.deque(maxlen=100)
             while not coord.should_stop():
                 batch_time = time.time()
 
@@ -298,11 +300,18 @@ def main(args):
                 if step % args.checkpoint_interval == 0:
                     saver.save(sess, args.model_file, step)
 
+                step += 1
+
                 batch_duration = time.time() - batch_time
                 elapsed = time.time() - start_time
-                print("Took %.3fs, %s elapsed so far" % (batch_duration, time_taken(elapsed)))
+                if step > 10:
+                    remaining.append(batch_duration * (num_batches - step))
+                    avg_remaining = np.mean(remaining)
+                    remaining_text = ", %s remaining" % time_taken(avg_remaining)
+                else:
+                    remaining_text = ""
 
-                step += 1
+                print("Took %.3fs, %s elapsed so far%s" % (batch_duration, time_taken(elapsed), remaining_text))
 
         except tf.errors.OutOfRangeError:
             elapsed = time.time() - start_time
