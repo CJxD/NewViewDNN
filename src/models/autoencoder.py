@@ -8,7 +8,8 @@ class ConvAutoencoder(CNN):
     def __init__(self, filter_sizes=[3, 3, 3], n_filters=[10, 10, 10], image_channels=1):
         super().__init__()
         self.activation = tf.nn.relu
-        self.conv_strides = self.deconv_strides = [1, 2, 2, 1]
+        self.conv_strides = [1, 1, 1, 1]
+        self.deconv_strides = [1, 2, 2, 1]
 
         self.n_filters = [image_channels] + n_filters
         self.filter_sizes = filter_sizes
@@ -43,6 +44,7 @@ class ConvAutoencoder(CNN):
             name = 'conv' + str(i+1)
             shapes.append(prev_layer.shape.as_list())
             prev_layer = self.conv_layer(prev_layer, name)
+            prev_layer = self.max_pool(prev_layer)
 
         # Inner-most latent representation
         self._z = prev_layer
