@@ -81,11 +81,28 @@ class CNN(ABC):
 
             return output
     
+    def weighted_diff(self, images, targets, threshold=0.1, base_weight=0.5):
+        '''Generates a binary  image mask with white areas being the differences,
+        and dark areas being the similarities.'''
+        # Take absolute difference of images
+        diff = tf.abs(targets - images)
+        # Squash differences into a single greyscale channel
+        greyscale = tf.reduce_sum(diff, 3, keep_dims=True)
+
+        # Threshold the greyscale channel into black and white
+        # but add a base level to make sure no part of the image
+        # is completely ignored
+        min_value = tf.zeros_like(greyscale) + base_weight
+        max_value = tf.ones_like(greyscale)
+        thresholded = tf.where(greyscale > threshold, max_value, min_value)
+
+        return thresholded
+
     def euclidean_loss(self, tensor, name='loss'):
         with tf.variable_scope(name):
             return tf.reduce_sum(tf.square(tensor))
 
-    def euclidean_mean(self, tensor):
+    def euclidean_mean(self, tensor, name='loss'):
         with tf.variable_scope(name):
             return tf.reduce_mean(tf.square(tensor))
 
