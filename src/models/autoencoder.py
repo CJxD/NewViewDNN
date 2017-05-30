@@ -56,7 +56,9 @@ class ConvAutoencoder(CNN):
 
         if self._t is not None:
             # Euclidean loss
-            self.loss = self.euclidean_loss(self._y - self._t)
+            # Weight the loss by regions with the highest difference
+            mask = self.weighted_diff(self._x, self._t)
+            self.loss = self.euclidean_loss((self._y - self._t) * mask)
         else:
             self.loss = None
 
