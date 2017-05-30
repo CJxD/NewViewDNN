@@ -244,7 +244,6 @@ def capture(model):
 	images = []
 	images.append(bpy.data.images.load(filepath_pre + "_Cam0.png"))
 	images.append(bpy.data.images.load(filepath_pre + "_Cam1.png"))
-	imperfect(object, [cam0.location, cam1.location])
 	project(images, object)
 	
 	# Post-projection

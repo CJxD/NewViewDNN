@@ -7,11 +7,11 @@ from os.path import *
 from glob import glob
 
 base_path = dirname(dirname(realpath(__file__)))
-corpus_path = join(base_path, "data", ".shapenet")
+corpus_path = join(base_path, "data", ".shapenet-nocorrupt")
 output_path = join(base_path, "data")
-train_file = join(output_path, "train.tfrecords")
-val_file = join(output_path, "val.tfrecords")
-test_file = join(output_path, "test.tfrecords")
+train_file = join(output_path, "train-nc.tfrecords")
+val_file = join(output_path, "val-nc.tfrecords")
+test_file = join(output_path, "test-nc.tfrecords")
 
 usage = "Usage: create_inputs.py [collection id, ...]"
 
@@ -88,7 +88,7 @@ def main(args):
 							'target_image': _bytes_feature(tf.compat.as_bytes(target_image))}))
     
 					records.write(example.SerializeToString())
-                                        print("Found %s" % join((synset_id, id))
+					print("Found %s" % join(synset_id, id))
 				except:
 					pass
 
