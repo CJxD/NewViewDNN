@@ -256,8 +256,11 @@ def capture(model):
 def main(args):
 	with open('view_interpolate.log', 'w') as log:
 		for model in args:
-			capture(model)
-			print(model, file=log)
+			try:
+				capture(model)
+				print(model, file=log)
+			except IOError as ex:
+				print(ex, file=sys.stderr)
 
 if __name__ == "__main__":
 	argv = sys.argv
