@@ -335,6 +335,7 @@ def main(args):
             loss_per_image = loss_per_patch / image_patch_ratio()
             print("Average patch loss:", loss_per_patch)
             print("Average image loss:", loss_per_image)
+            print("Standard deviation:", np.std(losses))
 
 
 if __name__ == '__main__':
