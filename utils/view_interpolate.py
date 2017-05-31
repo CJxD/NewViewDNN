@@ -219,6 +219,8 @@ def capture(model):
 	filepath_dst = os.path.join(model, "renders")
 	if not os.path.exists(filepath_dst):
 		os.makedirs(filepath_dst)
+	else:
+        	return
 		
 	# Paths for pre-projection and post-projection
 	filepath_pre = os.path.join(filepath_dst, "view")
@@ -259,7 +261,7 @@ def main(args):
 			try:
 				capture(model)
 				print(model, file=log)
-			except IOError as ex:
+			except Exception as ex:
 				print(ex, file=sys.stderr)
 
 if __name__ == "__main__":
