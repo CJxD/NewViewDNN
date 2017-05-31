@@ -148,11 +148,4 @@ class VGG16Autoencoder(CNN):
 
         self._y = self.deconv1_1
 
-        if self._t is not None:
-            # Euclidean loss
-            self.loss = self.euclidean_loss(self._y - self._t)
-        else:
-            self.loss = None
-
         return self
-

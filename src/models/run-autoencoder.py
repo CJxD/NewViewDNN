@@ -166,9 +166,11 @@ def main(args):
     Network outputs
     '''
     if args.mode == 'train':
-        optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(net.loss)
+        loss = net.weighted_loss(base_weight=0.5)
+        optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(loss)
     
     if args.mode == 'validate':
+        loss = net.weighted_loss(base_weight=0.5)
         losses = []
 
     if args.differential:
@@ -181,7 +183,7 @@ def main(args):
         output = net.output
 
     if args.mode == 'train':
-        input, target, output = batch([net.input, target, output], patches_per_img())
+        input, target, output = batch([input, target, output], patches_per_img())
 
     input_data = reconstruct_image(input, input_h, input_w)
     target_data = reconstruct_image(target, input_h, input_w)
@@ -193,7 +195,7 @@ def main(args):
 
     if args.summary_interval > 0:
          # Summaries
-         tf.summary.scalar("loss", net.loss)
+         tf.summary.scalar("loss", loss)
 
          tf.summary.image("input", [input_data])
          tf.summary.image("target", [target_data])
@@ -262,15 +264,15 @@ def main(args):
                 # Train
                 if args.mode == 'train':
                     print("Training batch %d/%d" % (step, num_batches))
-                    _, loss, s = sess.run([optimizer, net.loss, summary])
-                    patch_loss = loss // batch_size
-                    print("Loss per patch: %d (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
+                    _, l, s = sess.run([optimizer, loss, summary])
+                    patch_loss = l / batch_size
+                    print("Loss per patch: %.1f (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
 
                 # Validate
                 elif args.mode == 'validate':
                     print("Validating batch %d/%d" % (step, num_batches))
-                    loss, s = sess.run([net.loss, summary])
-                    losses.append(loss)
+                    l, s = sess.run([loss, summary])
+                    losses.append(l)
 
                 # Generate outputs
                 elif args.mode == 'run':
@@ -323,10 +325,16 @@ def main(args):
         Results
         '''
         if args.mode == 'train':
-            print("Final image loss:", loss / image_patch_ratio() // batch_size)
+            loss_per_patch = l / batch_size
+            loss_per_image = loss_per_patch / image_patch_ratio()
+            print("Final patch loss:", loss_per_patch)
+            print("Final image loss:", loss_per_image)
         
         elif args.mode == 'validate':
-            print("Average image loss:", np.mean(losses) / image_patch_ratio() // batch_size)
+            loss_per_patch = np.mean(losses) / batch_size
+            loss_per_image = loss_per_patch / image_patch_ratio()
+            print("Average patch loss:", loss_per_patch)
+            print("Average image loss:", loss_per_image)
 
 
 if __name__ == '__main__':
