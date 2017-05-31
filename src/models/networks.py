@@ -24,7 +24,6 @@ class CNN(ABC):
         self._y = None
         self._z = None
         self._t = None
-        self.loss = None
 
     @abstractmethod
     def build(self, images, targets=None):
@@ -81,8 +80,8 @@ class CNN(ABC):
 
             return output
     
-    def weighted_diff(self, images, targets, threshold=0.1, base_weight=0.5):
-        '''Generates a binary  image mask with white areas being the differences,
+    def diff_mask(self, images, targets, threshold=0.1, base_weight=0.0):
+        '''Generates a binary image mask with white areas being the differences,
         and dark areas being the similarities.'''
         # Take absolute difference of images
         diff = tf.abs(targets - images)
@@ -98,13 +97,14 @@ class CNN(ABC):
 
         return thresholded
 
-    def euclidean_loss(self, tensor, name='loss'):
+    def euclidean_loss(self, name='loss'):
         with tf.variable_scope(name):
-            return tf.reduce_sum(tf.square(tensor))
+            return tf.reduce_sum(tf.square(self._y - self._t))
 
-    def euclidean_mean(self, tensor, name='loss'):
+    def weighted_loss(self, threshold=0.1, base_weight=0.0, name='loss'):
         with tf.variable_scope(name):
-            return tf.reduce_mean(tf.square(tensor))
+            mask = self.diff_mask(self._x, self._t, threshold, base_weight)
+            return tf.reduce_sum(tf.square((self._y - self._t) * mask))
 
     @property
     def input(self):
@@ -130,3 +130,6 @@ class CNN(ABC):
     def latent_state(self):
         return self._z
 
+    @property
+    def loss(self):
+        return self.euclidean_loss()
