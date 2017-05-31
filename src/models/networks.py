@@ -14,6 +14,9 @@ class CNN(ABC):
         self.deconv_strides = [1, 1, 1, 1]
         self.deconv_padding = 'SAME'
 
+        self.skip_strides = [1, 1, 1, 1]
+        self.skip_padding = 'SAME'
+
         self.pool_kernel = [1, 2, 2, 1]
         self.pool_strides = [1, 2, 2, 1]
         self.pool_padding = 'SAME'
@@ -74,6 +77,21 @@ class CNN(ABC):
 
             deconv = tf.nn.conv2d_transpose(bottom, kernel, top_shape, strides=self.deconv_strides, padding=self.deconv_padding)
             output = self.activation(deconv + bias)
+
+            tf.summary.histogram("weights", kernel)
+            tf.summary.histogram("biases", bias)
+            tf.summary.histogram("activations", output)
+
+            return output
+
+    def skip_connection(self, bottom1, bottom2, axis=3, name='skip'):
+        with tf.variable_scope(name):
+            kernel = tf.Variable(self.get_kernel(name), name='W')
+            bias = tf.Variable(self.get_bias(name), name='b')
+
+            bottom = tf.concat([bottom1, bottom2], axis=axis)
+            conv = tf.nn.conv2d(bottom, kernel, strides=self.skip_strides, padding=self.skip_padding)
+            output = self.activation(conv + bias)
 
             tf.summary.histogram("weights", kernel)
             tf.summary.histogram("biases", bias)
