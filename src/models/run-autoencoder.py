@@ -105,8 +105,8 @@ def main(args):
     '''
     Data loading
     '''
-    if os.path.splitext(args.input_file)[1] == '.tfrecords':
-        input_images, target_images = read_records([args.input_file])
+    if os.path.splitext(args.input_files[0])[1] == '.tfrecords':
+        input_images, target_images = read_records(args.input_files)
 
         input_patches = generate_patches(input_images, patch_h, patch_w)
         target_patches = generate_patches(target_images, patch_h, patch_w)
@@ -114,11 +114,14 @@ def main(args):
         input_batches, target_batches = batch([input_patches, target_patches], batch_size)
 
         num_examples = 0
-        for record in tf.python_io.tf_record_iterator(args.input_file):
-            num_examples += 1
+        for f in args.input_files:
+            for record in tf.python_io.tf_record_iterator(f):
+                num_examples += 1
     else:
-        with open(args.input_file) as input_file:
-            input_list = input_file.read().splitlines()
+        input_list = []
+        for f in args.input_files:
+            with open(f) as input_file:
+                input_list += input_file.read().splitlines()
 
         input_images = read_files(input_list)
         input_patches = generate_patches(input_images, patch_h, patch_w)
@@ -336,7 +339,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convolutional Autoencoder Runner')
     parser.add_argument('mode', help="train, validate, or run")
     
-    parser.add_argument('-i', '--input-file', required=True, help="Input TFRecords file or list of input images (run mode only) [required]")
+    parser.add_argument('-i', '--input-files', nargs='+', required=True, help="Input TFRecords files or list of input images (run mode only) [required]")
     parser.add_argument('-o', '--output-dir', help="Directory to store output images [required in run mode]")
 
     parser.add_argument('-b', '--batch-size', default=batch_size, type=int, help="Number of examples per batch (default: num patches per image)")
