@@ -198,7 +198,8 @@ def main(args):
 
     if args.summary_interval > 0:
          # Summaries
-         tf.summary.scalar("loss", loss)
+         if loss:
+             tf.summary.scalar("loss", loss)
 
          tf.summary.image("input", [input_data])
          tf.summary.image("target", [target_data])
