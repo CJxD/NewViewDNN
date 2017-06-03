@@ -173,9 +173,12 @@ def main(args):
         loss = net.euclidean_loss()
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
-    if args.mode == 'validate':
+    elif args.mode == 'validate':
         loss = net.euclidean_loss()
         losses = []
+
+    else:
+        loss = tf.constant(0)
 
     if args.differential:
         input = net.input
@@ -199,8 +202,7 @@ def main(args):
 
     if args.summary_interval > 0:
          # Summaries
-         if loss:
-             tf.summary.scalar("loss", loss)
+         tf.summary.scalar("loss", loss)
 
          tf.summary.image("input", [input_data])
          tf.summary.image("target", [target_data])
