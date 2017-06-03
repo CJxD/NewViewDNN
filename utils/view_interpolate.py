@@ -73,11 +73,13 @@ def setup_scene():
 	# Lighting
 	scene.world.horizon_color = (1.0, 1.0, 1.0)	
 	light_settings = scene.world.light_settings
-	light_settings.use_environment_light = True
-	light_settings.environment_energy = 1
-	light_settings.use_ambient_occlusion = True
-	light_settings.ao_factor = 0.1
-	light_settings.ao_blend_type = 'ADD'
+	light_settings.use_environment_light = False
+	light_settings.use_ambient_occlusion = False
+	light_data = bpy.data.lamps.new("Light", type='HEMI')
+	light_data.energy = 1.0
+	light = bpy.data.objects.new(name="Light", object_data=light_data)
+	light.location = (0.0, 0.0, 1.0)
+	scene.objects.link(light)
 	
 	# Cameras
 	camera_data = bpy.data.cameras.new("Camera")
@@ -193,6 +195,7 @@ def render(camera, filepath, id=""):
 	settings.image_settings.file_format = 'PNG'
 	settings.image_settings.color_mode = 'RGBA'
 	settings.alpha_mode = 'TRANSPARENT'
+	settings.use_raytrace = False
 	
 	settings.filepath = "%s_%s.png" % (filepath, id)
 	settings.resolution_x = camera["render_size"][0]
@@ -220,7 +223,7 @@ def capture(model):
 	if not os.path.exists(filepath_dst):
 		os.makedirs(filepath_dst)
 	else:
-        	return
+		pass
 		
 	# Paths for pre-projection and post-projection
 	filepath_pre = os.path.join(filepath_dst, "view")
