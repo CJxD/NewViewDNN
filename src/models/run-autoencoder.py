@@ -190,7 +190,7 @@ def main(args):
         output = net.output
 
     if args.mode == 'train':
-        input, target, output = batch([net.input, target, output], patches_per_img())
+        input, target, output = batch([input, target, output], patches_per_img())
 
     input_data = reconstruct_image(input, input_h, input_w)
     target_data = reconstruct_image(target, input_h, input_w)
