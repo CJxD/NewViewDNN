@@ -169,12 +169,16 @@ def main(args):
     Network outputs
     '''
     if args.mode == 'train':
-        loss = net.weighted_loss(base_weight=0.5)
-        optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(loss)
+        learning_loss = net.weighted_loss(base_weight=0.5)
+        loss = net.euclidean_loss()
+        optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
-    if args.mode in ('validate', 'run'):
+    elif args.mode == 'validate':
         loss = net.euclidean_loss()
         losses = []
+
+    else:
+        loss = tf.constant(0)
 
     input = net.input
     target = net.target
