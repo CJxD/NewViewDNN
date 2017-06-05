@@ -289,9 +289,11 @@ def main(args):
                     tag = str(step)
                     fname_in = tf.constant(os.path.join(args.output_dir, tag + '_in.png'))
                     fname_out = tf.constant(os.path.join(args.output_dir, tag + '_out.png'))
+                    fname_tgt = tf.constant(os.path.join(args.output_dir, tag + '_tgt.png'))
                     fwrite_in = tf.write_file(fname_in, input_image)
                     fwrite_out = tf.write_file(fname_out, output_image)
-                    _, _, s = sess.run([fwrite_in, fwrite_out, summary])
+                    fwrite_tgt = tf.write_file(fname_tgt, target_image)
+                    _, _, s = sess.run([fwrite_in, fwrite_out, fwrite_tgt, summary])
 
                 # Write summary
                 if s:
