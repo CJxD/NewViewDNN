@@ -160,7 +160,7 @@ def main(args):
         print("Invalid model: %s.", file=sys.stderr)
         sys.exit(1)
         
-    if args.differential:
+    if args.differential and target_batches is not None:
         target_batches = target_batches - input_batches
 
     net.build(input_batches, target_batches)
