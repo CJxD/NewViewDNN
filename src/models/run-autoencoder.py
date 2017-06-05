@@ -169,12 +169,12 @@ def main(args):
     Network outputs
     '''
     if args.mode == 'train':
-        learning_loss = net.weighted_loss(base_weight=0.5)
-        loss = net.euclidean_loss()
+        learning_loss = net.weighted_loss(base_weight=0.5, name="learning_loss")
+        loss = net.euclidean_loss(name="image_loss")
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
     elif args.mode == 'validate':
-        loss = net.euclidean_loss()
+        loss = net.euclidean_loss(name="image_loss")
         losses = []
 
     else:
@@ -278,6 +278,8 @@ def main(args):
                 # Validate
                 elif args.mode == 'validate':
                     print("Validating batch %d/%d" % (step, num_batches))
+                    loss = tf.reduce_sum(tf.square(target_batches - input_batches))
+                    summary = tf.constant(0)
                     l, s = sess.run([loss, summary])
                     losses.append(l)
 
