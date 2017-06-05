@@ -404,6 +404,9 @@ if __name__ == '__main__':
             parser.print_help()
             print("Must specify output dir when in run mode.", file=sys.stdout)
             sys.exit(2)
+        else:
+            if not os.path.exists(args.output_dir):
+                os.makedirs(args.output_dir)
     
     if args.mode in ('validate', 'run'):
         num_epochs = 1
