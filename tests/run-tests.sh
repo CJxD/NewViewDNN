@@ -1,10 +1,12 @@
 #!/bin/bash
 
+data_path="../data"
+
 script="../src/models/run-autoencoder.py"
 flags=""
-train_flags="train -i ../data/train-nc.tfrecords --summary-interval 500 $flags"
-val_flags="validate -i ../data/val-nc.tfrecords --summary-interval 0 $flags"
-run_flags="run -i ../data/test_single.txt --summary-interval 0 $flags"
+train_flags="train -i $data_path/train-nc.tfrecords --summary-interval 500 $flags"
+val_flags="validate -i $data_path/val-nc.tfrecords --summary-interval 0 $flags"
+run_flags="run -i $data_path/test_single.txt --summary-interval 0 $flags"
 
 $script $train_flags -x 32 -y 32 -C 3 --model-file checkpoints/32x32x3/model.ckpt --log-dir logs/32x32x3
 $script $val_flags -x 32 -y 32 -C 3 --model-file checkpoints/32x32x3/model.ckpt 
