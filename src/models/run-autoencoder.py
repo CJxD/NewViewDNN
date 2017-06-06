@@ -160,7 +160,7 @@ def main(args):
         print("Invalid model: %s.", file=sys.stderr)
         sys.exit(1)
         
-    if args.differential:
+    if args.differential and target_batches is not None:
         target_batches = net.diff_mask(input_batches, target_batches, base_weight=0.0)
 
     net.build(input_batches, target_batches)
@@ -169,39 +169,49 @@ def main(args):
     Network outputs
     '''
     if args.mode == 'train':
-        learning_loss = net.weighted_loss(base_weight=0.5)
-        loss = net.euclidean_loss()
+        learning_loss = net.weighted_loss(base_weight=0.5, name="learning_loss")
+        loss = net.euclidean_loss(name="image_loss")
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
     elif args.mode == 'validate':
-        loss = net.euclidean_loss()
+        loss = net.euclidean_loss(name="image_loss")
         losses = []
 
-    else:
-        loss = tf.constant(0)
+    elif args.mode == 'run':
+        if net.target is not None:
+            loss = net.euclidean_loss(name="image_loss")
+        else:
+            loss = tf.constant(0)
 
     input = net.input
-    target = net.target
     output = net.output
+    target = net.target
+
+    if args.differential:
+        output += net.input
+        if target is not None:
+            target += net.input
 
     if args.mode == 'train':
-        input, target, output = batch([input, target, output], patches_per_img())
+        input, output, target = batch([input, output, target], patches_per_img())
 
     input_data = reconstruct_image(input, input_h, input_w)
-    target_data = reconstruct_image(target, input_h, input_w)
     output_data = reconstruct_image(output, input_h, input_w)
     input_image = encode_image(input_data)
-    target_image = encode_image(target_data)
     output_image = encode_image(output_data)
     patch_images = encode_images(net.output)
+    if target is not None:
+        target_data = reconstruct_image(target, input_h, input_w)
+        target_image = encode_image(target_data)
 
     if args.summary_interval > 0:
          # Summaries
          tf.summary.scalar("loss", loss)
 
          tf.summary.image("input", [input_data])
-         tf.summary.image("target", [target_data])
          tf.summary.image("output", [output_data])
+         if target is not None:
+             tf.summary.image("target", [target_data])
 
     '''
     Initialize session and graph
@@ -273,6 +283,8 @@ def main(args):
                 # Validate
                 elif args.mode == 'validate':
                     print("Validating batch %d/%d" % (step, num_batches))
+                    loss = tf.reduce_sum(tf.square(target_batches - input_batches))
+                    summary = tf.constant(0)
                     l, s = sess.run([loss, summary])
                     losses.append(l)
 
@@ -284,7 +296,14 @@ def main(args):
                     fname_out = tf.constant(os.path.join(args.output_dir, tag + '_out.png'))
                     fwrite_in = tf.write_file(fname_in, input_image)
                     fwrite_out = tf.write_file(fname_out, output_image)
-                    _, _, s = sess.run([fwrite_in, fwrite_out, summary])
+
+                    if target is not None:
+                        fname_tgt = tf.constant(os.path.join(args.output_dir, tag + '_tgt.png'))
+                        fwrite_tgt = tf.write_file(fname_tgt, target_image)
+                    else:
+                        fwrite_tgt = tf.constant(0)
+
+                    _, _, _, s = sess.run([fwrite_in, fwrite_out, fwrite_tgt, summary])
 
                 # Write summary
                 if s:
@@ -395,6 +414,9 @@ if __name__ == '__main__':
             parser.print_help()
             print("Must specify output dir when in run mode.", file=sys.stdout)
             sys.exit(2)
+        else:
+            if not os.path.exists(args.output_dir):
+                os.makedirs(args.output_dir)
     
     if args.mode in ('validate', 'run'):
         num_epochs = 1
