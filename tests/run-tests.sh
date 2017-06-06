@@ -1,6 +1,7 @@
 #!/bin/bash
 
 script="../run-test.sh"
+data_path="/mnt"
 
 $script -x 32 -y 32 -C 3 --model-file checkpoints/32x32x3/model.ckpt -o outputs/32x32x3 | tee 32x32x3.log
 
