@@ -171,6 +171,7 @@ def main(args):
     if args.mode == 'train':
         learning_loss = net.weighted_loss(base_weight=0.5, name="learning_loss")
         loss = net.euclidean_loss(name="image_loss")
+        losses = []
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
     elif args.mode == 'validate':
@@ -279,6 +280,7 @@ def main(args):
                     _, l, s = sess.run([optimizer, loss, summary])
                     patch_loss = l / batch_size
                     print("Loss per patch: %.1f (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
+                    losses.append(l)
 
                 # Validate
                 elif args.mode == 'validate':
@@ -345,17 +347,12 @@ def main(args):
         '''
         Results
         '''
-        if args.mode == 'train':
-            loss_per_patch = l / batch_size
-            loss_per_image = loss_per_patch / image_patch_ratio()
-            print("Final patch loss:", loss_per_patch)
-            print("Final image loss:", loss_per_image)
-        
-        elif args.mode == 'validate':
-            loss_per_patch = np.mean(losses) / batch_size
+        if args.mode in ('train', 'validate'):
+            loss_per_patch = np.median(losses) / batch_size
             loss_per_image = loss_per_patch / image_patch_ratio()
             print("Average patch loss:", loss_per_patch)
             print("Average image loss:", loss_per_image)
+            print("Standard deviation:", np.stddev(losses))
 
 
 if __name__ == '__main__':
