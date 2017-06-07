@@ -174,7 +174,7 @@ def main(args):
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
     elif args.mode == 'validate':
-        loss = net.euclidean_loss(name="image_loss")
+        loss = net.weighted_loss(base_weight=0.5, name="image_loss")
         losses = []
 
     elif args.mode == 'run':
@@ -393,6 +393,7 @@ if __name__ == '__main__':
 
     # Globals
     batch_size = args.batch_size
+    num_epochs = args.num_epochs
     shuffle = args.shuffle
     input_h = args.image_height
     input_w = args.image_width
