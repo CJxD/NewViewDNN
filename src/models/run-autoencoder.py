@@ -161,7 +161,7 @@ def main(args):
         sys.exit(1)
         
     if args.differential and target_batches is not None:
-        target_batches = net.diff_mask(input_batches, target_batches, base_weight=0.0)
+        target_batches = net.diff_mask(input_batches, target_batches, threshold=None)
 
     net.build(input_batches, target_batches)
 
@@ -169,13 +169,13 @@ def main(args):
     Network outputs
     '''
     if args.mode == 'train':
-        learning_loss = net.weighted_loss(base_weight=0.5, name="learning_loss")
+        learning_loss = net.euclidean_loss(name="learning_loss")
         loss = net.euclidean_loss(name="image_loss")
         losses = []
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
     elif args.mode == 'validate':
-        loss = net.weighted_loss(base_weight=0.5, name="image_loss")
+        loss = net.euclidean_loss(base_weight=0.5, name="image_loss")
         losses = []
 
     elif args.mode == 'run':
@@ -187,11 +187,6 @@ def main(args):
     input = net.input
     output = net.output
     target = net.target
-
-    if args.differential:
-        output += net.input
-        if target is not None:
-            target += net.input
 
     if args.mode == 'train':
         input, output, target = batch([input, output, target], patches_per_img())
