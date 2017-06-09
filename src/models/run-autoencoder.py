@@ -76,14 +76,6 @@ def encode_image(data):
 
     return encoded
 
-def encode_images(data):
-    data_queue = tf.train.batch([data],
-            batch_size=1,
-            enqueue_many=True,
-            capacity=10000)
-
-    return encode_image(data_queue[0])
-
 def batch(tensors, batch_size=batch_size):
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
@@ -105,11 +97,21 @@ def main(args):
     '''
     Data loading
     '''
-    if os.path.splitext(args.input_files[0])[1] == '.tfrecords':
-        input_images, target_images = read_records(args.input_files)
+    if args.mean is not None:
+        with open(args.mean, 'rb') as f:
+            mean_data = tf.constant(f.read())
+        mean_image = decode_image(mean_data)
 
-        input_patches = generate_patches(input_images, patch_h, patch_w)
-        target_patches = generate_patches(target_images, patch_h, patch_w)
+    if os.path.splitext(args.input_files[0])[1] == '.tfrecords':
+        input_image, target_image = read_records(args.input_files)
+
+        # Subtract dataset mean
+        if args.mean is not None:
+            input_image -= mean_image
+            target_image -= mean_image
+
+        input_patches = generate_patches(input_image, patch_h, patch_w)
+        target_patches = generate_patches(target_image, patch_h, patch_w)
 
         input_batches, target_batches = batch([input_patches, target_patches], batch_size)
 
@@ -123,8 +125,13 @@ def main(args):
             with open(f) as input_file:
                 input_list += input_file.read().splitlines()
 
-        input_images = read_files(input_list)
-        input_patches = generate_patches(input_images, patch_h, patch_w)
+        input_image = read_files(input_list)
+   
+        # Subtract dataset mean
+        if args.mean is not None:
+            input_image -= mean_image
+
+        input_patches = generate_patches(input_image, patch_h, patch_w)
         input_batches = batch([input_patches], batch_size)
 
         target_batches = None
@@ -198,11 +205,22 @@ def main(args):
 
     input_data = reconstruct_image(input, input_h, input_w)
     output_data = reconstruct_image(output, input_h, input_w)
+
+    # Re-add mean value
+    if args.mean is not None:
+        input_data += mean_image
+        output_data += mean_image
+
     input_image = encode_image(input_data)
     output_image = encode_image(output_data)
-    patch_images = encode_images(net.output)
+    patch_images = tf.map_fn(encode_image, net.output, dtype=tf.string)
+
+    # Target image, if available
     if target is not None:
         target_data = reconstruct_image(target, input_h, input_w)
+        if args.mean is not None:
+            target_data += mean_image
+
         target_image = encode_image(target_data)
 
     if args.summary_interval > 0:
@@ -367,6 +385,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--model', default='basic', help="basic (default) or vgg16")
     parser.add_argument('-w', '--pretrain-weights', help="Pretrained weights for the model, if applicable")
     parser.add_argument('-d', '--differential', action='store_true', help="Train for the differences between input and output images rather than the output image itself.")
+    parser.add_argument('--mean', help="Supply a mean image for normalisation in PNG format.")
     
     parser.add_argument('--filter-sizes', nargs='+', default=filter_sizes, type=int, help="List of kernel filter sizes to use for each convolutional layer (basic model only)")
     parser.add_argument('--num-filters', nargs='+', default=num_filters, type=int, help="Output depth for each convolutional layer (basic model only)")
