@@ -3,6 +3,7 @@
 import tensorflow as tf
 import sys
 from os.path import *
+from utils import generate_patches
 
 usage = "Usage: find_mean.py <TFRecords dataset path>"
 
@@ -10,7 +11,8 @@ input_dtype = tf.uint8
 dtype = tf.float32
 input_h = input_w = 1024
 input_ch = 4
-batch_size = 500
+patch_h = patch_w = 32
+num_samples = 100
 
 def read_records(record_list):
     filename_queue = tf.train.string_input_producer(record_list, num_epochs=1)
@@ -56,11 +58,10 @@ def main(args):
         print(usage, file=sys.stderr)
         sys.exit(1)
 
-    input_image, target_image = read_records([args[0]])
-    num_examples = sum(1 for _ in tf.python_io.tf_record_iterator(args[0]))
+    input_image, _ = read_records([args[0]])
+    input_patches = generate_patches(input_image, patch_h, patch_w)
 
-    input_mean = tf.Variable(tf.zeros(input_image.shape, dtype))
-    target_mean = tf.Variable(tf.zeros(target_image.shape, dtype))
+    mean = tf.Variable(tf.zeros([patch_h, patch_w, input_ch], dtype))
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -68,28 +69,25 @@ def main(args):
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
-        for i in range(num_examples):
+        for i in range(num_samples):
             alpha = 1.0 / (i+1)
 
-            update_input_mean = input_mean.assign(mix(input_mean, input_image, alpha))
-            update_target_mean = target_mean.assign(mix(input_mean, input_image, alpha))
+            batch_mean = tf.reduce_mean(input_patches, axis=0)
+            update_mean = mean.assign(mix(mean, batch_mean, alpha))
 
-            sess.run([update_input_mean, update_target_mean])
+            sess.run(update_mean)
 
-            print("Processed image %d/%d" % (i, num_examples))
+            print("Processed image %d/%d" % (i, num_samples))
 
-        input_mean_image = encode_image(input_mean)
-        target_mean_image = encode_image(target_mean)
+        mean_image = encode_image(mean)
 
         output_dir = dirname(args[0])
-        output_name = splitext(args[0])[0]
+        output_name = splitext(basename(args[0]))[0]
         
-        fname_in = tf.constant(join(output_dir, output_name + '-input-mean.png'))
-        fname_tgt = tf.constant(join(output_dir, output_name + '-target-mean.png'))
-        fwrite_in = tf.write_file(fname_in, input_mean_image)
-        fwrite_tgt = tf.write_file(fname_tgt, target_mean_image)
+        fname = tf.constant(join(output_dir, output_name + '-mean.png'))
+        fwrite = tf.write_file(fname, mean_image)
 
-        sess.run([fwrite_in, fwrite_tgt])
+        sess.run([fwrite])
         coord.request_stop()
         coord.join(threads) 
 

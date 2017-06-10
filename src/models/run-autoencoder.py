@@ -100,15 +100,11 @@ def main(args):
     if args.mean is not None:
         with open(args.mean, 'rb') as f:
             mean_data = tf.constant(f.read())
-        mean_image = decode_image(mean_data)
+        mean = decode_image(mean_data)
+        mean = tf.image.resize_images(mean, [patch_h, patch_w])
 
     if os.path.splitext(args.input_files[0])[1] == '.tfrecords':
         input_image, target_image = read_records(args.input_files)
-
-        # Subtract dataset mean
-        if args.mean is not None:
-            input_image -= mean_image
-            target_image -= mean_image
 
         input_patches = generate_patches(input_image, patch_h, patch_w)
         target_patches = generate_patches(target_image, patch_h, patch_w)
@@ -126,10 +122,6 @@ def main(args):
                 input_list += input_file.read().splitlines()
 
         input_image = read_files(input_list)
-   
-        # Subtract dataset mean
-        if args.mean is not None:
-            input_image -= mean_image
 
         input_patches = generate_patches(input_image, patch_h, patch_w)
         input_batches = batch([input_patches], batch_size)
@@ -137,6 +129,19 @@ def main(args):
         target_batches = None
         
         num_examples = len(input_list)
+
+    if args.mode == 'train' and args.validation is not None:
+        val_images, val_target_images = read_records(args.validation)
+        val_patches = generate_patches(val_images, patch_h, patch_w)
+        val_target_patches = generate_patches(val_target_images, patch_h, patch_w)
+        val_batches, val_target_batches = batch([val_patches, val_target_patches], batch_size)
+
+        num_validations = 0
+        for f in args.validation:
+            for record in tf.python_io.tf_record_iterator(f):
+                num_validations += 1
+
+        validation_interval = num_examples // num_validations
 
     if args.mode in ('train', 'validate'):
         if target_batches is None:
@@ -166,6 +171,12 @@ def main(args):
     else:
         print("Invalid model: %s.", file=sys.stderr)
         sys.exit(1)
+
+    # Subtract dataset mean
+    if args.mean is not None:
+        subtract_mean = lambda image: image - mean
+        input_batches = tf.map_fn(subtract_mean, input_batches)
+        target_batches = tf.map_fn(subtract_mean, target_batches)
         
     if args.differential and target_batches is not None:
         target_batches = target_batches - input_batches
@@ -177,17 +188,18 @@ def main(args):
     '''
     if args.mode == 'train':
         learning_loss = net.weighted_loss(base_weight=0.5, name="learning_loss")
-        loss = net.euclidean_loss(name="image_loss")
+        loss = net.euclidean_loss(name="pixelwise_image_loss") / (input_h * input_w)
+        val_loss = net.euclidean_loss(name="pixelwise_validation_loss") / (input_h * input_w)
         losses = []
         optimizer = tf.train.AdamOptimizer(args.learning_rate).minimize(learning_loss)
     
     elif args.mode == 'validate':
-        loss = net.weighted_loss(base_weight=0.5, name="image_loss")
+        loss = net.euclidean_loss(name="pixelwise_image_loss") / (input_h * input_w)
         losses = []
 
     elif args.mode == 'run':
         if net.target is not None:
-            loss = net.euclidean_loss(name="image_loss")
+            loss = net.euclidean_loss(name="pixelwise_image_loss") / (input_h * input_w)
         else:
             loss = tf.constant(0)
 
@@ -200,17 +212,18 @@ def main(args):
         if target is not None:
             target += net.input
 
+    # Re-add mean value
+    if args.mean is not None:
+        add_mean = lambda image: image + mean
+        input = tf.map_fn(add_mean, input)
+        output = tf.map_fn(add_mean, output)
+        target = tf.map_fn(add_mean, target)
+
     if args.mode == 'train':
         input, output, target = batch([input, output, target], patches_per_img())
 
     input_data = reconstruct_image(input, input_h, input_w)
     output_data = reconstruct_image(output, input_h, input_w)
-
-    # Re-add mean value
-    if args.mean is not None:
-        input_data += mean_image
-        output_data += mean_image
-
     input_image = encode_image(input_data)
     output_image = encode_image(output_data)
     patch_images = tf.map_fn(encode_image, net.output, dtype=tf.string)
@@ -218,14 +231,15 @@ def main(args):
     # Target image, if available
     if target is not None:
         target_data = reconstruct_image(target, input_h, input_w)
-        if args.mean is not None:
-            target_data += mean_image
-
         target_image = encode_image(target_data)
 
     if args.summary_interval > 0:
          # Summaries
          tf.summary.scalar("loss", loss)
+         if args.validation is not None:
+             val_loss_var = tf.Variable(tf.constant(0.0), name="validation_loss")
+             update_val_loss = val_loss_var.assign(val_loss)
+             tf.summary.scalar("validation_loss", val_loss_var)
 
          tf.summary.image("input", [input_data])
          tf.summary.image("output", [output_data])
@@ -294,11 +308,18 @@ def main(args):
 
                 # Train
                 if args.mode == 'train':
-                    print("Training batch %d/%d" % (step, num_batches))
-                    _, l, s = sess.run([optimizer, loss, summary])
-                    patch_loss = l / batch_size
-                    print("Loss per patch: %.1f (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
-                    losses.append(l)
+                    if args.validation is not None and step % validation_interval == 0:
+                        print("Validating")
+                        val_batch, val_target_batch = sess.run([val_batches, val_target_batches])
+                        l, _, s = sess.run([val_loss, update_val_loss, summary], feed_dict={net.input: val_batch, net.target: val_target_batch})
+                        patch_loss = l / batch_size
+                        print("Loss per patch: %.1f (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
+                    else:
+                        print("Training batch %d/%d" % (step, num_batches))
+                        _, l, s = sess.run([optimizer, loss, summary])
+                        patch_loss = l / batch_size
+                        print("Loss per patch: %.1f (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
+                        losses.append(l)
 
                 # Validate
                 elif args.mode == 'validate':
@@ -378,6 +399,7 @@ if __name__ == '__main__':
     parser.add_argument('mode', help="train, validate, or run")
     
     parser.add_argument('-i', '--input-files', nargs='+', required=True, help="Input TFRecords files or list of input images (run mode only) [required]")
+    parser.add_argument('-v', '--validation', nargs='+', help="Run validation at evenly spaced intervals with another TFRecords file.")
     parser.add_argument('-o', '--output-dir', help="Directory to store output images [required in run mode]")
 
     parser.add_argument('-b', '--batch-size', default=batch_size, type=int, help="Number of examples per batch (default: num patches per image)")
@@ -427,6 +449,8 @@ if __name__ == '__main__':
         sys.exit(2)
         
     if args.mode == 'run':
+        args.validation = None
+
         if not args.output_dir:
             parser.print_help()
             print("Must specify output dir when in run mode.", file=sys.stdout)

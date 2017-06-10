@@ -109,8 +109,8 @@ class VGG16Autoencoder(CNN):
         ]
 
     def build(self, images, targets=None):
-        self._x = images
-        self._t = targets
+        self._x = tf.placeholder_with_default(images, images.shape)
+        self._t = tf.placeholder_with_default(targets, targets.shape) if targets is not None else None
 
         # Build the encoder
         self.conv1_1 = self.conv_layer(self._x, "conv1_1")
