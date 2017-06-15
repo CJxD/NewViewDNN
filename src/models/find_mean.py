@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
 import sys
 from os.path import *
 from utils import generate_patches
@@ -10,7 +12,7 @@ usage = "Usage: find_mean.py <TFRecords dataset path>"
 input_dtype = tf.uint8
 dtype = tf.float32
 input_h = input_w = 1024
-input_ch = 4
+input_ch = 3
 patch_h = patch_w = 32
 num_samples = 100
 
@@ -69,13 +71,21 @@ def main(args):
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
+        hue_list = []
         for i in range(num_samples):
             alpha = 1.0 / (i+1)
 
             batch_mean = tf.reduce_mean(input_patches, axis=0)
             update_mean = mean.assign(mix(mean, batch_mean, alpha))
 
-            sess.run(update_mean)
+            hsv = tf.image.rgb_to_hsv(input_patches)
+
+            hues, _ = sess.run([hsv, update_mean])
+            for image in hues:
+                for y in image:
+                    for x in y:
+                        h, s, l = x
+                        hue_list.append(h)
 
             print("Processed image %d/%d" % (i, num_samples))
 
@@ -84,12 +94,21 @@ def main(args):
         output_dir = dirname(args[0])
         output_name = splitext(basename(args[0]))[0]
         
+        hist, bins = np.histogram(hue_list, bins=64)
+        np.save(join(output_dir, output_name + '-histogram.npy'), (hist, bins))
+
         fname = tf.constant(join(output_dir, output_name + '-mean.png'))
         fwrite = tf.write_file(fname, mean_image)
 
         sess.run([fwrite])
         coord.request_stop()
-        coord.join(threads) 
+        coord.join(threads)
+
+    width = 0.7 * (bins[1] - bins[0])
+    center = (bins[:-1] + bins[1:]) / 2
+    plt.bar(center, hist, align='center', width=width)
+    plt.ylim([0, np.percentile(hist, 90)])
+    plt.show()
 
 if __name__ == '__main__':
     main(sys.argv[1:])
