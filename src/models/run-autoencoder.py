@@ -312,13 +312,11 @@ def main(args):
                         print("Validating")
                         val_batch, val_target_batch = sess.run([val_batches, val_target_batches])
                         l, _, s = sess.run([val_loss, update_val_loss, summary], feed_dict={net.input: val_batch, net.target: val_target_batch})
-                        patch_loss = l / batch_size
-                        print("Loss per patch: %.1f (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
+                        print("Loss per pixel: %f" % l)
                     else:
                         print("Training batch %d/%d" % (step, num_batches))
                         _, l, s = sess.run([optimizer, loss, summary])
-                        patch_loss = l / batch_size
-                        print("Loss per patch: %.1f (%.2f%%)" % (patch_loss, 100 * patch_loss / (patch_h * patch_w * input_ch)))
+                        print("Loss per pixel: %f" % l)
                         losses.append(l)
 
                 # Validate
@@ -387,6 +385,7 @@ def main(args):
         Results
         '''
         if args.mode in ('train', 'validate'):
+            losses = reject_outliers(losses)
             loss_per_patch = np.median(losses) / batch_size
             loss_per_image = loss_per_patch / image_patch_ratio()
             print("Average patch loss:", loss_per_patch)
