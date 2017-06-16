@@ -38,8 +38,8 @@ class ConvAutoencoder(CNN):
             ]
 
     def build(self, images, targets=None):
-        self._x = images
-        self._t = targets
+        self._x = tf.placeholder_with_default(images, images.shape)
+        self._t = tf.placeholder_with_default(targets, targets.shape) if targets is not None else None
         shapes = []
         skip_connections = []
         prev_layer = self._x

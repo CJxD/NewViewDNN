@@ -1,5 +1,5 @@
 import tensorflow as tf
-import math
+import numpy as np
 
 def lrelu(x, leak=0.2, name="lrelu"):
     '''Leaky rectifier.
@@ -19,7 +19,7 @@ def lrelu(x, leak=0.2, name="lrelu"):
     with tf.variable_scope(name):
         f1 = 0.5 * (1 + leak)
         f2 = 0.5 * (1 - leak)
-        return f1 * x + f2 * abs(x)
+        return f1 * x + f2 * np.abs(x)
 
 def generate_patches(image, patch_h, patch_w, name='patch'):
     '''Splits an image into patches of size patch_h x patch_w
@@ -65,6 +65,13 @@ def reconstruct_image(patches, image_h, image_w, name='reconstruct'):
         image = tf.batch_to_space_nd(image, [patch_h, patch_w], pad)
 
     return image[0]
+
+def reject_outliers(data, m = 2.):
+    data = np.asarray(data)
+    d = np.abs(data - np.median(data))
+    mdev = np.median(d)
+    s = d/mdev if mdev else 0.
+    return data[s<m]
 
 def time_taken(seconds):
     hours, remainder = divmod(seconds, 3600)
